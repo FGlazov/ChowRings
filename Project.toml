@@ -1,0 +1,13 @@
+name = "MatroidChowRings"
+uuid = "e3c35b23-bd24-4cf7-a55c-bee01fe8dc3f"
+authors = ["Fedor Glazov <glazov@math.tu-berlin.de> and contributors"]
+version = "0.1.0"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
