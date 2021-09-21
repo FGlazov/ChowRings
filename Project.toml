@@ -3,6 +3,10 @@ uuid = "e3c35b23-bd24-4cf7-a55c-bee01fe8dc3f"
 authors = ["Fedor Glazov <glazov@math.tu-berlin.de> and contributors"]
 version = "0.1.0"
 
+[deps]
+Oscar = "f1435218-dba5-11e9-1e4d-f1a5fab5fc13"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+
 [compat]
 julia = "1"
 
