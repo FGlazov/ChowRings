@@ -5,8 +5,7 @@ const pm = Polymake;
 
 struct MChowRing
     chow_ring # TODO Add types here.
-    projection
-    indeterminates::Vector{fmpq_mpoly}
+    indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}
     matroid::pm.BigObject
 end
 
@@ -17,7 +16,6 @@ end
 function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
     # TODO: Check bounds of matroid element?
 
-    # TODO: matroid.COLOOPS seems to be broken. Ask why?
     matroid = chow_ring.matroid
 
     first_term = matroid_chow_ring(pm.matroid.deletion(matroid, matroid_element))
@@ -48,14 +46,14 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
             push!(proper_flat_copy, matroid_element)
             if proper_flat_copy in flat_canidates
                 matroid_1 = pm.matroid.contraction(matroid, proper_flat_copy)
-                matroid_2 = pm.matroid.deletion(matroid, set_complement(ground_set, proper_flat_copy))
+                matroid_2 = pm.matroid.deletion(matroid, set_complement(ground_set, proper_flat))
 
                 push!(second_term, (matroid_chow_ring(matroid_1), matroid_chow_ring(matroid_2)))
             end
         end
     end
 
-    coloops = matroid.DUAL.LOOPS
+    coloops = pm.matroid.coloops(matroid)
     is_coloop = pm.in(matroid_element, coloops)
     coloop_term = nothing
     if is_coloop
@@ -95,8 +93,9 @@ function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
     chow_modulus = ideal(base_ring, generators)
     # Add std(ideal) to compute standard basis?
     chow_ring, projection = quo(base_ring, chow_modulus)
+    projected_indeterminates = [projection(indeterminate) for indeterminate in indeterminates]
 
-    MChowRing(chow_ring, projection, indeterminates, matroid)
+    MChowRing(chow_ring, projected_indeterminates, matroid)
 end
 
 
@@ -126,7 +125,10 @@ function augmented_matroid_chow_ring(matroid::pm.BigObject)
     chow_modulus = ideal(base_ring, generators)
     # Add std(ideal) to compute standard basis?
     chow_ring, projection = quo(base_ring, chow_modulus)
-    chow_ring, projection, matroid_element_vars, flat_vars
+
+    projected_element_vars = [projection(matroid_element_var) for matroid_element_var in matroid_element_vars]
+    projected_flat_vars = [projection(flat_var) for flat_var in flat_vars]
+    chow_ring, projected_element_vars, projected_flat_vars
 end
 
 
@@ -135,7 +137,7 @@ function generate_base_ring(proper_flats)
     # TODO: This doesn't seem to work well when it represents the trivial ring.
     #       Printing a trivial ring generated here causes errors.
     #       Perhaps a different way to create the trivial ring?
-    PolynomialRing( QQ, variable_names);
+    PolynomialRing(QQ, variable_names);
 end
 
 function generate_augmented_base_ring(proper_flats, n_elements)
