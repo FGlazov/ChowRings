@@ -78,13 +78,17 @@ function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
 
     # Technically non-empty proper flats. First element is either empty or the whole set, last element is the other of the two.
     proper_flats = flats[2:pm.size(flats, 1)-1, 1:pm.size(flats,2)]
-    base_ring, indeterminates = generate_base_ring(proper_flats)
 
-    if length(indeterminates) == 0
-        return MChowRing(base_ring, nothing, indeterminates, matroid)
+    if length(proper_flats) == 0
+        # TODO: Better representation of trivial ring?
+        return MChowRing(nothing, nothing, [], matroid)
     end
 
-    type_i_polynomials = generate_type_i_ideal(proper_flats, indeterminates, matroid)
+
+    base_ring, indeterminates = generate_base_ring(proper_flats)
+
+
+    type_i_polynomials = generate_type_i_ideal(base_ring, proper_flats, indeterminates, matroid)
     type_j_polynomials = generate_type_j_ideal(proper_flats, indeterminates)
     generators = vcat(type_i_polynomials, type_j_polynomials)
 
@@ -165,14 +169,14 @@ function create_flat_variables_names(flats)
 end
 
 
-function generate_type_i_ideal(proper_flats, indeterminates, matroid)
+function generate_type_i_ideal(base_ring, proper_flats, indeterminates, matroid)
     n = matroid.N_ELEMENTS
     n_proper_flats = pm.size(proper_flats, 1)
     ideal_polynomials = Vector{fmpq_mpoly}()
 
     for i in 1:n
         for j in i+1:n
-            ij_polynomial = indeterminates[1] - indeterminates[1] # TODO: Better way to create zero polynomial?
+            ij_polynomial = base_ring() # Create zero.
             ij_set = Set{Int64}([i,j])
             for flat_index in 1:n_proper_flats
                 proper_flat = pm.row(proper_flats, flat_index)
