@@ -1,5 +1,7 @@
 module MatroidChowRings
 
+export direct_sum_decomp, matroid_chow_ring, augmented_matroid_chow_ring
+
 using Oscar;
 const pm = Polymake;
 
