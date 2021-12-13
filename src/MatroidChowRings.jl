@@ -13,7 +13,7 @@ Fields
                   It may be == None, in that case chow ring is trivial (= 0).
 - indeterminates: The indeterminates of the chow ring. These are of the form
                   x_F, where F is a nonempty proper flat. The name of F
-                  corresponds to elements inside that flat. I.e. x_157 would
+                  corresponds to elements inside that flat. E.g. x__1_5_7 would
                   be the flat consisting of the elements 1, 5, and 7. Another
                   way to see all the flats would be to call
                   matroid.LATTICE_OF_FLATS.FACES.
@@ -97,10 +97,10 @@ end
 
 function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
     # TODO: Check bounds of matroid element?
-
     matroid = chow_ring.matroid
 
     first_term = matroid_chow_ring(pm.matroid.deletion(matroid, matroid_element))
+    first_term_morphism = create_theta_i(first_term, chow_ring, matroid_element)
 
     ground_set = Polymake.Set(range(0, matroid.N_ELEMENTS - 1,step=1))
     flats = matroid.LATTICE_OF_FLATS.FACES
@@ -144,8 +144,82 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
 
     #TODO Also return a function which represents the cannonical isomorphism.
 
-    first_term, second_term, coloop_term
+    first_term, second_term, coloop_term, first_term_morphism
 
+end
+
+"""
+Creates theta_i as described on page 2 of
+"A semi-small decomposition of the Chow ring of a matroid" by Braden et. al,
+times a given factor in the image. E.g. x__1_3_5 * theta_i
+
+These modified theta_i are the building blocks of the isomoprhisms of terms
+inside the direct sum decomposition of a Chow ring with Chow Rings of smaller
+matroids.
+"""
+function create_theta_i(domain::MChowRing, image::MChowRing, deleted_element::Int64, factor=1)
+    image_gens = Vector{MPolyQuoElem{fmpq_mpoly}}(undef, length(gens(domain.chow_ring)))
+    domain_gens = gens(domain.chow_ring)
+
+    for i = 1:length(gens(domain.chow_ring))
+        domain_gen = domain_gens[i]
+        image_gens[i] = factor * find_gen_image(domain_gen, image, deleted_element)
+    end
+
+    hom(domain.chow_ring, image.chow_ring, image_gens)
+end
+
+# TODO: This works... but it's ugly string hacking.
+# One should instead pass around a dict of set ints to variables instead.
+"""
+Helper function for create_theta_i. Given e.g. domain_gen = x_1_3_5_7 and
+deleted element = 5, it creates the polynomial
+
+x_1_3_6_8 + x_1_3_5_6_8 in the image, where a term is set to 0 if the
+ corresponding variable does not exist in the image.
+"""
+function find_gen_image(domain_gen, image::MChowRing, deleted_element::Int64)
+     s = string(domain_gen)
+     elements_in_flat = split(s, "__")[2]
+
+     first_canidate = "x_"
+     second_canidate = "x_"
+
+     previous_element = nothing
+     second_canidate_adjusted = false
+     for element_string in split(elements_in_flat, "_")
+         element = parse(Int, element_string)
+         if element >= deleted_element
+             element += 1
+         end
+         if element > deleted_element &&
+            (previous_element == nothing || previous_element < deleted_element)
+              second_canidate = second_canidate * "_" * string(deleted_element)
+              second_canidate_adjusted = true
+         end
+
+         first_canidate = first_canidate * "_" * string(element)
+         second_canidate = second_canidate * "_" * string(element)
+         previous_element = element
+     end
+
+     if !second_canidate_adjusted
+         second_canidate = second_canidate * "_" * string(deleted_element)
+     end
+
+     first_term = image.chow_ring()
+     second_term = image.chow_ring()
+     for image_gen in gens(image.chow_ring)
+         image_gen_string = string(image_gen)
+         if image_gen_string == first_canidate
+             first_term = image_gen
+         end
+         if image_gen_string == second_canidate
+             second_term = image_gen
+         end
+     end
+
+     first_term + second_term
 end
 
 function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
@@ -154,6 +228,7 @@ function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
     end
 
     flats = matroid.LATTICE_OF_FLATS.FACES;
+    #TODO: Is there a way to avoid this conversion?
     flats = pm.@pm common.convert_to{IncidenceMatrix}(flats)
 
     # Technically non-empty proper flats. First element is either empty or the whole set, last element is the other of the two.
@@ -164,9 +239,7 @@ function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
         return MChowRing(nothing, [], matroid)
     end
 
-
     base_ring, indeterminates = generate_base_ring(proper_flats)
-
 
     type_i_polynomials = generate_type_i_ideal(base_ring, proper_flats, indeterminates, matroid)
     type_j_polynomials = generate_type_j_ideal(proper_flats, indeterminates)
@@ -225,7 +298,8 @@ end
 function generate_augmented_base_ring(proper_flats, n_elements)
     matroid_element_variable_names = Array{String}(undef, n_elements)
     for i in 1:n_elements
-        matroid_element_variable_names[i] = "y_" * string(i)
+        # TODO: Remove the "- 1" if an IncidenceMatrix is not created..
+        matroid_element_variable_names[i] = "y_" * string(i - 1)
     end
 
     flat_variable_names = create_flat_variables_names(proper_flats)
@@ -247,6 +321,23 @@ function create_flat_variables_names(flats)
         set_name = split(string(pm.row(flats, i)), "\n")[2]
         variable_descriptor = replace(set_name[2:length(set_name)-1], " " => "_")
         variable_names[i] = "x__" * variable_descriptor
+    end
+
+    # TODO: Remove this for loop doing "- 1" if an IncidenceMatrix is not created.
+    # Currently the indexing is shifted when the IncidenceMatrix is created.
+    for i in 1:n_flats
+        variable_name = variable_names[i]
+        new_name = "x_"
+        numbers = split(variable_name, "__")[2]
+        for number in split(numbers, "_")
+            if number == ""
+                new_name = "x__"
+            else
+                element = parse(Int, number)
+                new_name = new_name * "_" * string(element - 1)
+            end
+        end
+        variable_names[i] = new_name
     end
 
     variable_names
