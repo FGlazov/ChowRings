@@ -9,7 +9,7 @@ const pm = Polymake;
 Represents a matroid Chow ring. The result of a matroid_chow_ring call.
 
 Fields
-- chow_ring:      The cChow ring of the matroid, represented as an affine algebra.
+- chow_ring:      The Chow ring of the matroid, represented as an affine algebra.
                   It may be == None, in that case chow ring is trivial (= 0).
 - indeterminates: The indeterminates of the chow ring. These are of the form
                   x_F, where F is a nonempty proper flat. The name of F
@@ -38,13 +38,15 @@ domain of the LHS, you need to use this structure.
 
 This structure represents the morphism:
 
-first_term_morphism + sum_((A, B) in second_term_morphism) A*B + coloop_term_morphism
+first_term_morphism + coloop_term_morphism + sum_(f in second_term_morphism) f( g_f * h_f)
+
+Where g_f,h_f are projections from CH(M_F+1) and CH(M^F), respectively, to CH(M-i).
+The input to g_f and h_f would then be values in the corresponding tuple in MChowRingDecomp.
 
 Fields:
 - deleted_element:      The element deleted on the RHS of the decomposition.
 - first_term_morphism:  Sends elements of the first_term into the LHS.
-- second_term_morphism: A vector of tuples of morphisms. Sends a member
-                        of the second term into the LHS.
+- second_term_morphism: A vector of morphisms. Sends an element of
 - coloop_term_morphism: An optional morphism, that sends members of the
                         coloopterm into the LHS.
 """
@@ -96,7 +98,7 @@ function direct_sum_decomp(matroid::pm.BigObject, matroid_element::Int64)
 end
 
 function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
-    # TODO: Check bounds of matroid element?
+    # TODO: Check bounds of matroid element.
     matroid = chow_ring.matroid
 
     first_term = matroid_chow_ring(pm.matroid.deletion(matroid, matroid_element))
@@ -121,6 +123,7 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
 
     # This loop might be a good candiate for parralelization.
     second_term = []
+    second_term_morphism = []
     for flat_index in 1:n_proper_flats
         proper_flat = pm.row(proper_flats, flat_index)
         if !Polymake.in(matroid_element, proper_flat)
@@ -130,7 +133,14 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
                 matroid_1 = pm.matroid.contraction(matroid, proper_flat_copy)
                 matroid_2 = pm.matroid.deletion(matroid, set_complement(ground_set, proper_flat))
 
-                push!(second_term, (matroid_chow_ring(matroid_1), matroid_chow_ring(matroid_2)))
+                chow_1 = matroid_chow_ring(matroid_1)
+                chow_2 = matroid_chow_ring(matroid_2)
+
+                push!(second_term, (chow_1, chow_2))
+
+                # TODO: Need to adjust term for reindexing here
+                # term = find_flat_variable(first_term, proper_flat_copy)
+                # morphism = create_theta_i(coloop_term, chow_ring, matroid_element, term)
             end
         end
     end
@@ -138,13 +148,17 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
     coloops = pm.matroid.coloops(matroid)
     is_coloop = pm.in(matroid_element, coloops)
     coloop_term = nothing
+    coloop_term_morphism = nothing
     if is_coloop
         coloop_term = first_term
+        flat = copy(ground_set)
+        delete!(flat, matroid_element)
+        term = find_flat_variable(chow_ring, flat)
+        coloop_term_morphism = create_theta_i(coloop_term, chow_ring, matroid_element, term)
     end
 
-    #TODO Also return a function which represents the cannonical isomorphism.
-
-    first_term, second_term, coloop_term, first_term_morphism
+    #TODO Change output into MChowRingDecomp
+    first_term, second_term, coloop_term
 
 end
 
@@ -158,6 +172,9 @@ inside the direct sum decomposition of a Chow ring with Chow Rings of smaller
 matroids.
 """
 function create_theta_i(domain::MChowRing, image::MChowRing, deleted_element::Int64, factor=1)
+    # TODO: Replace "deleted element" with "deleted_set"!
+    # The terms in the big sum are matroids which result from deleting many elements.
+
     image_gens = Vector{MPolyQuoElem{fmpq_mpoly}}(undef, length(gens(domain.chow_ring)))
     domain_gens = gens(domain.chow_ring)
 
@@ -179,8 +196,7 @@ x_1_3_6_8 + x_1_3_5_6_8 in the image, where a term is set to 0 if the
  corresponding variable does not exist in the image.
 """
 function find_gen_image(domain_gen, image::MChowRing, deleted_element::Int64)
-     s = string(domain_gen)
-     elements_in_flat = split(s, "__")[2]
+     elements_in_flat = split(string(domain_gen), "__")[2]
 
      first_canidate = "x_"
      second_canidate = "x_"
@@ -206,7 +222,6 @@ function find_gen_image(domain_gen, image::MChowRing, deleted_element::Int64)
      if !second_canidate_adjusted
          second_canidate = second_canidate * "_" * string(deleted_element)
      end
-
      first_term = image.chow_ring()
      second_term = image.chow_ring()
      for image_gen in gens(image.chow_ring)
@@ -220,6 +235,38 @@ function find_gen_image(domain_gen, image::MChowRing, deleted_element::Int64)
      end
 
      first_term + second_term
+end
+
+# TODO: Find some way to remove this ugly string hacking
+"""
+Finds the generator in chow_ring with exactly the elements as in contents.
+"""
+function find_flat_variable(chow_ring::MChowRing, contents)
+    for gen in gens(chow_ring.chow_ring)
+        elements_in_flat = split(split(string(gen), "__")[2], "_")
+
+        if length(elements_in_flat) != length(contents)
+            continue
+        end
+
+        sets_equal = true
+        for element_string in elements_in_flat
+            element = parse(Int, element_string)
+            if !Polymake.in(element, contents)
+                sets_equal = false
+                break
+            end
+        end
+
+        if !sets_equal
+            continue
+        end
+
+        # If the control flow reaches here, then the gen has the same elements
+        # as contents.
+
+        return gen
+    end
 end
 
 function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
