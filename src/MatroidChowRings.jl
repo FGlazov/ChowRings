@@ -6,10 +6,10 @@ using Oscar;
 const pm = Polymake;
 
 """
-Represents a matroid chow ring. The result of a matroid_chow_ring call.
+Represents a matroid Chow ring. The result of a matroid_chow_ring call.
 
 Fields
-- chow_ring:      The chow ring of the matroid, represented as an affine algebra.
+- chow_ring:      The cChow ring of the matroid, represented as an affine algebra.
                   It may be == None, in that case chow ring is trivial (= 0).
 - indeterminates: The indeterminates of the chow ring. These are of the form
                   x_F, where F is a nonempty proper flat. The name of F
@@ -161,7 +161,7 @@ function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
 
     if length(proper_flats) == 0
         # TODO: Better representation of trivial ring?
-        return MChowRing(nothing, nothing, [], matroid)
+        return MChowRing(nothing, [], matroid)
     end
 
 
