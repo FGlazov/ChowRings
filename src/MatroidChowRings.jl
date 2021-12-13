@@ -8,7 +8,7 @@ const pm = Polymake;
 """
 Represents a matroid chow ring. The result of a matroid_chow_ring call.
 
-# Fields
+Fields
 - chow_ring:      The chow ring of the matroid, represented as an affine algebra.
                   It may be == None, in that case chow ring is trivial (= 0).
 - indeterminates: The indeterminates of the chow ring. These are of the form
@@ -28,8 +28,36 @@ struct MChowRing
 end
 
 """
+Represents a homorphism which sends the RHS of a Chow ring direct sum
+decomposition to the LHS of the decompositon.
+
+Note that the right hand side of the decomposition is not represented as
+subalgebras of CH(M), but as Chow rings which are isomorphic to the subalgebras
+of CH(M). If you wish to turn an element on the RHS to one which lives in the
+domain of the LHS, you need to use this structure.
+
+This structure represents the morphism:
+
+first_term_morphism + sum_((A, B) in second_term_morphism) A*B + coloop_term_morphism
+
+Fields:
+- deleted_element:      The element deleted on the RHS of the decomposition.
+- first_term_morphism:  Sends elements of the first_term into the LHS.
+- second_term_morphism: A vector of tuples of morphisms. Sends a member
+                        of the second term into the LHS.
+- coloop_term_morphism: An optional morphism, that sends members of the
+                        coloopterm into the LHS.
+"""
+struct MChowRingHomorphism
+    deleted_element::Int64
+    first_term_morphism
+    second_term_morphism
+    coloop_term_morphism
+end
+
+"""
 Represents a direct sum decomposition of the Chow ring of a matroid. See
-"A semi-small decomposition of the Chow ring of a matroid" by Braden et. al for
+"A semi-small decomposition of the Chow ring of a matroid by Braden et. al" for
 details. The result of a direct_sum_decomp call.
 
 Note that the right hand side of the decomposition is not represented as
@@ -37,16 +65,16 @@ subalgebras of CH(M), but as Chow rings which are isomorphic to the subalgebras
 of CH(M). If you wish to turn an element on the RHS to one which lives in the
 domain of the LHS, you need to use the homomorphism field.
 
-# Fields:
+Fields:
 - deleted_element: The element which was deleted on the RHS of the decomposition.
 - chow_ring_LHS:   The chow ring which was decomposed.
 - first_term:      Always present part of the decomposition, equal to the chow
-                   ring of M\i.
+                   ring of M-i.
 - second_term:     A vector of tuples of chow rings. This has varying length,
-                   and each tuple is of the form (CH(M_{F+i}), CH(M^F), where
+                   and each tuple is of the form (CH(M_(F+i)), CH(M^F), where
                    i is the deleted element, and F is a flat.
 - coloopterm:      A term that appears in the decomposition if deleted_element
-                   is a coloop. Equal to the chow ring of M\i if present.
+                   is a coloop. Equal to the chow ring of M-i if present.
 - homomorphism:    Represents the homomorphism which takes a combination of
                    elements from the first/second_term/coloop_term and maps it
                    to the LHS of the decomposition.
@@ -61,33 +89,7 @@ struct MChowRingDecomp #TODO Add types here.
 end
 
 #TODO: Document how to use this.
-"""
-Represents a homorphism which sends the RHS of a Chow ring direct sum
-decomposition to the LHS of the decompositon.
 
-Note that the right hand side of the decomposition is not represented as
-subalgebras of CH(M), but as Chow rings which are isomorphic to the subalgebras
-of CH(M). If you wish to turn an element on the RHS to one which lives in the
-domain of the LHS, you need to use this structure.
-
-This structure represents the morphism:
-
-first_term_morphism + \sum_{(A, B) in second_term_morphism} A*B + coloop_term_morphism
-
-# Fields:
-- deleted_element:      The element deletedon the RHS of the decomposition.
-- first_term_morphism:  Sends elements of the first_term into the LHS.
-- second_term_morphism: A vector of tuples of morphisms. Sends a member
-                        of the second term into the LHS.
-- coloop_term_morphism: An optional morphism, that sends members of the
-                        coloopterm into the LHS.
-"""
-struct MChowRingHomorphism
-    deleted_element::Int64
-    first_term_morphism
-    second_term_morphism
-    coloop_term_morphism
-end
 
 function direct_sum_decomp(matroid::pm.BigObject, matroid_element::Int64)
     direct_sum_decomp(matroid_chow_ring(matroid), matroid_element)
