@@ -468,7 +468,7 @@ function augmented_matroid_chow_ring(matroid::pm.BigObject)
     # Add std(ideal) to compute standard basis?
     chow_ring, projection = quo(base_ring, chow_modulus)
 
-    projected_element_vars = [projection(matroiMChowRingDecompd_element_var) for matroid_element_var in matroid_element_vars]
+    projected_element_vars = [projection(matroid_element_var) for matroid_element_var in matroid_element_vars]
     projected_flat_vars = [projection(flat_var) for flat_var in flat_vars]
     chow_ring, projected_element_vars, projected_flat_vars
 end
