@@ -114,7 +114,7 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
     # TODO: I'm sure this can be done MUCH faster using the IncidenceMatrix stucture.
     # That way, we can turn a "O(2*n)" pass into a "O(n) + O(log n)" pass
     for flat_index in 1:n_proper_flats
-        proper_flat = pm.row(proper_flats, flat_index)
+        proper_flat = extract_flat(proper_flats, flat_index)
         if Polymake.in(matroid_element, proper_flat)
             push!(flat_canidates, proper_flat)
         end
@@ -125,7 +125,7 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
     second_term = []
     second_term_morphism = []
     for flat_index in 1:n_proper_flats
-        proper_flat = pm.row(proper_flats, flat_index)
+        proper_flat = extract_flat(proper_flats, flat_index)
         if !Polymake.in(matroid_element, proper_flat)
             proper_flat_copy = copy(proper_flat)
             push!(proper_flat_copy, matroid_element)
@@ -344,9 +344,8 @@ end
 
 function generate_augmented_base_ring(proper_flats, n_elements)
     matroid_element_variable_names = Array{String}(undef, n_elements)
-    for i in 1:n_elements
-        # TODO: Remove the "- 1" if an IncidenceMatrix is not created..
-        matroid_element_variable_names[i] = "y_" * string(i - 1)
+    for i in 0:n_elements-1
+        matroid_element_variable_names[i+1] = "y_" * string(i)
     end
 
     flat_variable_names = create_flat_variables_names(proper_flats)
@@ -363,28 +362,11 @@ function create_flat_variables_names(flats)
     variable_names = Array{String}(undef, n_flats)
 
     for i in 1:n_flats
-        row = pm.row(flats, i)
+        row = extract_flat(flats, i)
         # TODO: Is there some better way to extract the polymake string without the type?
         set_name = split(string(pm.row(flats, i)), "\n")[2]
         variable_descriptor = replace(set_name[2:length(set_name)-1], " " => "_")
         variable_names[i] = "x__" * variable_descriptor
-    end
-
-    # TODO: Remove this for loop doing "- 1" if an IncidenceMatrix is not created.
-    # Currently the indexing is shifted when the IncidenceMatrix is created.
-    for i in 1:n_flats
-        variable_name = variable_names[i]
-        new_name = "x_"
-        numbers = split(variable_name, "__")[2]
-        for number in split(numbers, "_")
-            if number == ""
-                new_name = "x__"
-            else
-                element = parse(Int, number)
-                new_name = new_name * "_" * string(element - 1)
-            end
-        end
-        variable_names[i] = new_name
     end
 
     variable_names
@@ -401,7 +383,8 @@ function generate_type_i_ideal(base_ring, proper_flats, indeterminates, matroid)
             ij_polynomial = base_ring() # Create zero.
             ij_set = Set{Int64}([i,j])
             for flat_index in 1:n_proper_flats
-                proper_flat = pm.row(proper_flats, flat_index)
+                proper_flat = extract_flat(proper_flats, flat_index)
+                print(proper_flat)
                 if pm.in(i, proper_flat)
                     ij_polynomial += indeterminates[flat_index]
                 end
@@ -423,7 +406,7 @@ function generate_augmented_type_i_ideal(proper_flats, matroid_element_vars, fla
     for i in 1:length(matroid_element_vars)
         ideal_polynomials[i] = matroid_element_vars[i]
         for j in 1:n_proper_flats
-            flat = Polymake.row(proper_flats, j)
+            flat = extract_flat(proper_flats, j)
             # TODO: There must be some much quicker way to access this.
             # I.e. some way to get all rows quickly which don't contain a given element.
             if !Polymake.in(i, flat)
@@ -441,8 +424,8 @@ function generate_type_j_ideal(proper_flats, indeterminates)
 
     for i in 1:n_proper_flats
         for j in i:n_proper_flats
-            i_flat = Polymake.row(proper_flats, i)
-            j_flat = Polymake.row(proper_flats, j)
+            i_flat = extract_flat(proper_flats, i)
+            j_flat = extract_flat(proper_flats, j)
             if are_sets_incomparable(i_flat, j_flat)
                 polynomial = indeterminates[i] * indeterminates[j]
                 push!(ideal_polynomials, polynomial)
@@ -462,7 +445,7 @@ function generate_augmented_type_j_ideal(proper_flats, matroid_element_vars, fla
 
     xy_polynomials = Vector{fmpq_mpoly}()
     for i in 1:n_proper_flats
-        flat = Polymake.row(proper_flats, i)
+        flat = extract_flat(proper_flats, i)
         for j in 1:length(matroid_element_vars)
             # TODO: There must be some much quicker way to access this.
             # I.e. some way to get all rows quickly which don't contain a given element.
@@ -501,6 +484,21 @@ function set_complement(ground_set, to_complement)
         delete!(result, i)
     end
     result
+end
+
+function extract_flat(flats, index)
+    flat = Polymake.row(flats, index)
+
+    # This is a hacky fix for the conversino to IncidenceMatrix adding 1 to every index.
+    result = Array{Int64}(undef, length(flat))
+
+    i = 1
+    for element in flat
+        result[i] = element - 1
+        i += 1
+    end
+
+    Polymake.Set(result)
 end
 
 end
