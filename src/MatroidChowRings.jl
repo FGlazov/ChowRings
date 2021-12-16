@@ -38,20 +38,23 @@ domain of the LHS, you need to use this structure.
 
 This structure represents the morphism:
 
-first_term_morphism + coloop_term_morphism + sum_(f in second_term_morphism) f( g_f * h_f)
+first_term_morphism + coloop_term_morphism + sum_((projection_1, projection_2, term)) term * projection_1 * projection 2
 
 Where g_f,h_f are projections from CH(M_F+1) and CH(M^F), respectively, to CH(M-i).
 The input to g_f and h_f would then be values in the corresponding tuple in MChowRingDecomp.
 
 Fields:
-- deleted_element:      The element deleted on the RHS of the decomposition.
 - first_term_morphism:  Sends elements of the first_term into the LHS.
-- second_term_morphism: A vector of morphisms. Sends an element of
+- second_term_morphism: A vector of tuples of morphisms and a term x_(F+i), written
+                        as (projection_1, projection_2, x_(F+i)). Each tuple represents
+                        the psi described in Propositon 2.21 of Tom Braden et. al.
+                        It is used in as isomorphism in the direct sum decompsotion, see
+                        Propositon 3.5. It can be seen as the product of two projections,
+                        along with a constant term. I.e. as term * projection_1 * projection_2.
 - coloop_term_morphism: An optional morphism, that sends members of the
                         coloopterm into the LHS.
 """
 struct MChowRingHomorphism
-    deleted_element::Int64
     first_term_morphism
     second_term_morphism
     coloop_term_morphism
@@ -87,7 +90,7 @@ struct MChowRingDecomp #TODO Add types here.
     first_term::MChowRing
     second_term
     coloopterm
-    homomorphism::MChowRingHomorphism
+    homomorphism::MChowRingHomorphism #TODO: Rename this "isomorphism"?
 end
 
 #TODO: Document how to use this.
@@ -130,17 +133,21 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
             proper_flat_copy = copy(proper_flat)
             push!(proper_flat_copy, matroid_element)
             if proper_flat_copy in flat_canidates
-                matroid_1 = pm.matroid.contraction(matroid, proper_flat_copy)
-                matroid_2 = pm.matroid.deletion(matroid, set_complement(ground_set, proper_flat))
+                to_remove_1 = proper_flat_copy
+                to_remove_2 = set_complement(ground_set, proper_flat)
+
+                matroid_1 = pm.matroid.contraction(matroid, to_remove_1)
+                matroid_2 = pm.matroid.deletion(matroid, to_remove_2)
 
                 chow_1 = matroid_chow_ring(matroid_1)
                 chow_2 = matroid_chow_ring(matroid_2)
 
                 push!(second_term, (chow_1, chow_2))
 
-                # TODO: Need to adjust term for reindexing here
-                # term = find_flat_variable(first_term, proper_flat_copy)
-                # morphism = create_theta_i(coloop_term, chow_ring, matroid_element, term)
+                projection_1 = create_projection(chow_1, chow_ring, to_remove_1, matroid_element, true)
+                projection_2 = create_projection(chow_2, chow_ring, to_remove_2, matroid_element, false)
+                term = find_flat_variable(first_term, proper_flat_copy)
+                push!(second_term_morphism(projection_1, projection_2, term))
             end
         end
     end
@@ -157,8 +164,11 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
         coloop_term_morphism = create_theta_i(coloop_term, chow_ring, matroid_element, term)
     end
 
+    chow_hom = MChowRingHomorphism(first_term_morphism, second_term_morphism, coloop_term_morphism)
+
     #TODO Change output into MChowRingDecomp
-    first_term, second_term, coloop_term
+
+    MChowRingDecomp(matroid_element, chow_ring, first_term, second_term, coloop_term, chow_hom)
 
 end
 
@@ -235,6 +245,93 @@ function find_gen_image(domain_gen, image::MChowRing, deleted_element::Int64)
      end
 
      first_term + second_term
+end
+
+"""
+Creates a projection function from a chow ring to another chow ring, where the
+corresponding domain matroid is a contraction or deletion of the codomain matroid.
+
+This is a building block of the pushforward map psi described in Proposition 2.18
+and used in Proposition 3.5 to describe the isomorphisms behind the Chow ring
+decomposition.
+
+For contraction: The removed elements correspond to a flat F+i. In this case,
+X_(F') gets mapped to X_(F+i union F')
+
+For deletion: The removed elements correspond to the complement of a flat F.
+There still exists a corresponding i. In this case, X_(F') gets mapped to
+X_(F') + X_(F'+i).
+"""
+function create_projection(domain::MChowRing, image::MChowRing, removed_elements, i::Int64, is_contraction::Bool)
+    if domain.chow_ring == nothing # Edge case where ring is trivial.
+        return nothing
+    end
+
+    image_gens = Vector{MPolyQuoElem{fmpq_mpoly}}(undef, length(gens(domain.chow_ring)))
+    domain_gens = gens(domain.chow_ring)
+
+        if x1 == nothing
+            print("This shouldn't happen x1. \n")
+            x1 = 0
+        end
+        if x2 == nothing
+            print("This shouldn't happen x2. \n")
+            x2 = 0
+        end
+    # Relates matroid elements of the domain with the image
+    # This is the reindexing of contraction/deletion in reverse.
+    int_mapping = Array{Int64}(undef, domain.matroid.N_ELEMENTS)
+    next_free_element = 0
+    while Polymake.in(next_free_element, removed_elements)
+        next_free_element += 1
+    end
+    for j = 1:length(int_mapping)
+        int_mapping[j] = next_free_element
+
+        next_free_element += 1
+        while Polymake.in(next_free_element, removed_elements)
+            next_free_element += 1
+        end
+    end
+
+
+    for j = 1:length(gens(domain.chow_ring))
+        domain_gen = domain_gens[j]
+        image_gens[j] = project_gen(domain_gen, image, removed_elements, i, is_contraction, int_mapping)
+    end
+
+    hom(domain.chow_ring, image.chow_ring, image_gens)
+end
+
+function project_gen(domain_gen::MPolyQuoElem{fmpq_mpoly}, image::MChowRing, removed_elements, i::Int64, is_contraction::Bool, int_mapping)
+    elements_in_gen = split(split(string(domain_gen), "__")[2], "_")
+    elements_in_gen = [parse(Int, e) for e in elements_in_gen]
+
+    contents_image = Vector{Int}(undef, length(elements_in_gen))
+    for i = 1:length(elements_in_gen)
+        base_element = elements_in_gen[i]
+
+        # Due to reindexing, have to add a 1 for each element that was removed
+        # when the contraction/deletion happened.
+        reindexing_offset = length([e for e in removed_elements if e <= base_element])
+        contents_image[i] = base_element + reindexing_offset
+    end
+    # +1 here because matroid elements start from 0, and arrays start from 1.
+    contents_image = [int_mapping[e+1] for e in elements_in_gen]
+
+    if is_contraction
+        contents_image = vcat(contents_image, Vector(removed_elements))
+        sort!(contents_image)
+        return find_flat_variable(image, contents_image)
+    else
+        x1 = find_flat_variable(image, contents_image)
+        append!(contents_image, i)
+        sort!(contents_image)
+        x2 = find_flat_variable(image, contents_image)
+        # Due to the structure of S_i, x1 and x2 should always be found.
+        return x1 + x2
+    end
+
 end
 
 # TODO: Find some way to remove this ugly string hacking
@@ -364,7 +461,7 @@ function create_flat_variables_names(flats)
     for i in 1:n_flats
         row = extract_flat(flats, i)
         # TODO: Is there some better way to extract the polymake string without the type?
-        set_name = split(string(pm.row(flats, i)), "\n")[2]
+        set_name = split(string(extract_flat(flats, i)), "\n")[2]
         variable_descriptor = replace(set_name[2:length(set_name)-1], " " => "_")
         variable_names[i] = "x__" * variable_descriptor
     end
@@ -384,7 +481,6 @@ function generate_type_i_ideal(base_ring, proper_flats, indeterminates, matroid)
             ij_set = Set{Int64}([i,j])
             for flat_index in 1:n_proper_flats
                 proper_flat = extract_flat(proper_flats, flat_index)
-                print(proper_flat)
                 if pm.in(i, proper_flat)
                     ij_polynomial += indeterminates[flat_index]
                 end
