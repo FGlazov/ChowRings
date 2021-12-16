@@ -1,6 +1,6 @@
 module MatroidChowRings
 
-export direct_sum_decomp, matroid_chow_ring, augmented_matroid_chow_ring
+export direct_sum_decomp, matroid_chow_ring, augmented_matroid_chow_ring, apply_homorphism
 
 using Oscar;
 const pm = Polymake;
@@ -49,10 +49,11 @@ Fields:
                         as (projection_1, projection_2, x_(F+i)). Each tuple represents
                         the psi described in Propositon 2.21 of Tom Braden et. al.
                         It is used in as isomorphism in the direct sum decompsotion, see
-                        Propositon 3.5. It can be seen as the product of two projections,
+                        Propositon 3.5. It can be seen as the product of two projections, a theta_i
                         along with a constant term. I.e. as term * projection_1 * projection_2.
+                        Here projection_2 already contains the theta_i.
 - coloop_term_morphism: An optional morphism, that sends members of the
-                        coloopterm into the LHS.
+                        coloopterm into the LHS. Equal to X_(E-i) * theta_i
 """
 struct MChowRingHomorphism
     first_term_morphism
@@ -93,13 +94,14 @@ struct MChowRingDecomp #TODO Add types here.
     homomorphism::MChowRingHomorphism #TODO: Rename this "isomorphism"?
 end
 
-#TODO: Document how to use this.
 
-
+# TODO: Document and add example.
 function direct_sum_decomp(matroid::pm.BigObject, matroid_element::Int64)
     direct_sum_decomp(matroid_chow_ring(matroid), matroid_element)
 end
 
+# TODO: Implement an augmented version of this.
+# TODO: Document and add example.
 function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
     # TODO: Check bounds of matroid element.
     matroid = chow_ring.matroid
@@ -366,6 +368,47 @@ function find_flat_variable(chow_ring::MChowRing, contents)
     end
 end
 
+# TODO: Add types here. Test it. Add example.
+"""
+This applies the MChowRingHomorphism, sending an element of the RHS of a
+direct sum decomposition into the LHS.
+
+Note that the right hand side of the decomposition is not represented as
+subalgebras of CH(M), but as Chow rings which are isomorphic to the subalgebras
+of CH(M). If you wish to turn an element on the RHS to one which lives in the
+domain of the LHS, you need to use this structure.
+
+So using this function you can instead recover an element which truely does
+belong to the original CH(M).
+
+Note that the fields here are strongly correlated. The chow_ring_hom must be a
+MChowRingHomorphism from some MChowRingDecomp.
+
+The first_term field must be an element inside the first_term of MChowRingDecomp.
+The second_term must be a vector of 2-tuples, containing elements of the
+second_term of the corresponding second_term of a MChowRingDecomp, in the same
+order as they are in MChowRingDecomp.
+
+"""
+function apply_homorphism(chow_ring_hom::MChowRingHomorphism, first_term, second_term, coloop_term)
+    result = chow_ring_hom.first_term_morphism(first_term)
+
+    i = 1
+    for (contracted_term, deleted_term) in second_term
+        projection_1, projection_2, term = chow_ring_hom.second_term_morphism[i]
+
+        result +=  term * projection_1(contracted_term) * projection_2(deleted_term)
+        i += 1
+    end
+
+    if coloop_term != nothing
+        result += chow_ring_hom.coloop_term_morphism(coloop_term)
+    end
+
+    result
+end
+
+# TODO: Document and add example.
 function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
     if pm.type_name(matroid) != "Matroid"
         throw(ArgumentError("BigObject is not a matroid."))
@@ -397,7 +440,7 @@ function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
     MChowRing(chow_ring, projected_indeterminates, matroid)
 end
 
-
+# TODO: Document and add example.
 function augmented_matroid_chow_ring(matroid::pm.BigObject)
     if pm.type_name(matroid) != "Matroid"
         throw(ArgumentError("BigObject is not a matroid."))
@@ -425,7 +468,7 @@ function augmented_matroid_chow_ring(matroid::pm.BigObject)
     # Add std(ideal) to compute standard basis?
     chow_ring, projection = quo(base_ring, chow_modulus)
 
-    projected_element_vars = [projection(matroid_element_var) for matroid_element_var in matroid_element_vars]
+    projected_element_vars = [projection(matroiMChowRingDecompd_element_var) for matroid_element_var in matroid_element_vars]
     projected_flat_vars = [projection(flat_var) for flat_var in flat_vars]
     chow_ring, projected_element_vars, projected_flat_vars
 end
