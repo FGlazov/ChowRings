@@ -97,13 +97,35 @@ struct MChowRingDecomp #TODO Add types here.
 end
 
 
-# TODO: Document and add example.
+"""
+    function direct_sum_decomp(matroid::pm.BigObject, matroid_element::Int64)
+
+Convinience function to compute the direct sum decomposition of the chow ring of a matroid without
+first explicitely computing the chow ring itself. See documentation of the same function applied
+to a chow ring of type MChowRing for more details.
+
+The matroid may be any loopless matroid.
+Matroid element is a number from 0 to matroid.NR_ELEMENTS-1, inclusive.
+The matroid element is the one which is removed in the decomposition.
+
+# Example
+'''julia-repl
+julia> using Oscar
+julia> using MatroidChowRings
+julia> f8 = Polymake.matroid.f8_matroid();
+julia> decomp = direct_sum_decomp(f8, 3);
+'''
+"""
 function direct_sum_decomp(matroid::pm.BigObject, matroid_element::Int64)
     direct_sum_decomp(matroid_chow_ring(matroid), matroid_element)
 end
 
 # TODO: Implement an augmented version of this.
-# TODO: Document and add example.
+"""
+Computes the 
+
+
+"""
 function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
     # TODO: Check bounds of matroid element.
     matroid = chow_ring.matroid
@@ -151,7 +173,7 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
                 projection_1 = create_projection(chow_1, chow_ring, to_remove_1, matroid_element, true)
                 projection_2 = create_projection(chow_2, chow_ring, to_remove_2, matroid_element, false)
                 term = find_flat_variable(first_term, proper_flat_copy)
-                push!(second_term_morphism(projection_1, projection_2, term))
+                push!(second_term_morphism, (projection_1, projection_2, term))
             end
         end
     end
@@ -269,14 +291,6 @@ function create_projection(domain::MChowRing, image::MChowRing, removed_elements
     image_gens = Vector{MPolyQuoElem{fmpq_mpoly}}(undef, length(gens(domain.chow_ring)))
     domain_gens = gens(domain.chow_ring)
 
-        if x1 == nothing
-            print("This shouldn't happen x1. \n")
-            x1 = 0
-        end
-        if x2 == nothing
-            print("This shouldn't happen x2. \n")
-            x2 = 0
-        end
     # Relates matroid elements of the domain with the image
     # This is the reindexing of contraction/deletion in reverse.
     int_mapping = Array{Int64}(undef, domain.matroid.N_ELEMENTS)
