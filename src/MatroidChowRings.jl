@@ -1,3 +1,5 @@
+# TODO: Split this up into multiple files.
+
 module MatroidChowRings
 
 export direct_sum_decomp, matroid_chow_ring, augmented_matroid_chow_ring, apply_homorphism
@@ -23,7 +25,7 @@ Fields
 """
 struct MChowRing
     chow_ring # TODO Add types here.
-    indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}
+    indeterminates#::Vector{MPolyQuoElem{fmpq_mpoly}}
     matroid::pm.BigObject
 end
 
@@ -168,8 +170,6 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
 
     chow_hom = MChowRingHomorphism(first_term_morphism, second_term_morphism, coloop_term_morphism)
 
-    #TODO Change output into MChowRingDecomp
-
     MChowRingDecomp(matroid_element, chow_ring, first_term, second_term, coloop_term, chow_hom)
 
 end
@@ -184,9 +184,6 @@ inside the direct sum decomposition of a Chow ring with Chow Rings of smaller
 matroids.
 """
 function create_theta_i(domain::MChowRing, image::MChowRing, deleted_element::Int64, factor=1)
-    # TODO: Replace "deleted element" with "deleted_set"!
-    # The terms in the big sum are matroids which result from deleting many elements.
-
     image_gens = Vector{MPolyQuoElem{fmpq_mpoly}}(undef, length(gens(domain.chow_ring)))
     domain_gens = gens(domain.chow_ring)
 
@@ -309,15 +306,6 @@ function project_gen(domain_gen::MPolyQuoElem{fmpq_mpoly}, image::MChowRing, rem
     elements_in_gen = split(split(string(domain_gen), "__")[2], "_")
     elements_in_gen = [parse(Int, e) for e in elements_in_gen]
 
-    contents_image = Vector{Int}(undef, length(elements_in_gen))
-    for i = 1:length(elements_in_gen)
-        base_element = elements_in_gen[i]
-
-        # Due to reindexing, have to add a 1 for each element that was removed
-        # when the contraction/deletion happened.
-        reindexing_offset = length([e for e in removed_elements if e <= base_element])
-        contents_image[i] = base_element + reindexing_offset
-    end
     # +1 here because matroid elements start from 0, and arrays start from 1.
     contents_image = [int_mapping[e+1] for e in elements_in_gen]
 
@@ -408,7 +396,54 @@ function apply_homorphism(chow_ring_hom::MChowRingHomorphism, first_term, second
     result
 end
 
-# TODO: Document and add example.
+"""
+    matroid_chow_ring(matroid::pm.BigObject)::MChowRing
+
+Computes the Chow ring of a matroid. It follows the convention of the chow ring as defined
+in 'A SEMI-SMALL DECOMPOSITION OF THE CHOW RING OF A MATROID' by Tom Braden, June Huh et. al.
+The chow ring is represented over the rationals, and only nonempty proper flats enter as variables.
+
+This function accepts any loopless matroid as input, where the matroid is a polymake matroid. 
+It returns the Chow ring described as a quitotent ring, and it does not precompute more than
+it needs to. In particular, if you do any calculations on the ring, then you will likely need
+to wait a bit the first time as it will likely compute a Gröbner basis
+
+# Example
+'''julia-repl
+julia> using Oscar
+julia> using MatroidChowRings
+julia> fano_matroid = Polymake.matroid.fano_matroid();
+julia> chow_ring =  matroid_chow_ring(fano_matroid);
+julia> x = chow_ring.indeterminates
+14-element Vector{MPolyQuoElem{fmpq_mpoly}}:
+ x__0
+ x__1
+ x__2
+ x__3
+ x__4
+ x__5
+ x__6
+ x__0_3_4
+ x__0_2_5
+ x__0_1_6
+ x__1_2_3
+ x__1_4_5
+ x__2_4_6
+ x__3_5_6
+ julia> x[1]
+ x__0
+ julia> x[8]
+ x__0_3_4
+ julia> x[11]
+ x__1_2_3
+ julia> x[1] * x[8]
+ -x__3_5_6^2
+ julia> x[1] * x[11]
+ 0
+
+'''
+
+"""
 function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
     if pm.type_name(matroid) != "Matroid"
         throw(ArgumentError("BigObject is not a matroid."))
@@ -476,9 +511,6 @@ end
 
 function generate_base_ring(proper_flats)
     variable_names = create_flat_variables_names(proper_flats)
-    # TODO: This doesn't seem to work well when it represents the trivial ring.
-    #       Printing a trivial ring generated here causes errors.
-    #       Perhaps a different way to create the trivial ring?
     PolynomialRing(QQ, variable_names);
 end
 
@@ -518,8 +550,8 @@ function generate_type_i_ideal(base_ring, proper_flats, indeterminates, matroid)
     n_proper_flats = pm.size(proper_flats, 1)
     ideal_polynomials = Vector{fmpq_mpoly}()
 
-    for i in 1:n
-        for j in i+1:n
+    for i in 0:n-1
+        for j in i+1:n-1
             ij_polynomial = base_ring() # Create zero.
             ij_set = Set{Int64}([i,j])
             for flat_index in 1:n_proper_flats
@@ -603,8 +635,6 @@ function are_sets_incomparable(a, b)
 end
 
 function are_sets_equal(a,b)
-
-
     is_subset(a,b) && is_subset(b,a)
 end
 
@@ -628,7 +658,7 @@ end
 function extract_flat(flats, index)
     flat = Polymake.row(flats, index)
 
-    # This is a hacky fix for the conversino to IncidenceMatrix adding 1 to every index.
+    # This is a hacky fix for the conversion to IncidenceMatrix adding 1 to every index.
     result = Array{Int64}(undef, length(flat))
 
     i = 1
