@@ -27,7 +27,34 @@ Fields
 """
 struct MChowRing
     chow_ring # TODO Add types here.
-    indeterminates#::Vector{MPolyQuoElem{fmpq_mpoly}}
+    indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}
+    matroid::pm.BigObject
+end
+
+"""
+    struct MAugChowRing
+
+Represents am augmented matroid Chow ring. The result of a augmented_matroid_chow_ring call.
+
+Fields
+- chow_ring:              The augmented Chow ring of the matroid, represented as an affine algebra.
+                          It may be == None, in that case chow ring is trivial (= 0).
+- flat_indeterminates:    The flat indeterminates of the augmented Chow ring. These are of the form
+                          x_F, where F is a proper flat. The name of F corresponds to elements inside
+                           that flat. E.g. x__1_5_7 would be the flat consisting of the 
+                          elements 1, 5, and 7. Another way to see all the flats would be to call
+                          matroid.LATTICE_OF_FLATS.FACES.
+                          This vector may be empty, in that case the chow ring is trivial.
+- element_indeterminates: The indeterminates of the augmented Chow ring. These are of the form y_i,
+                          where i is an element of the groundset of the matroid. The number of these
+                          corresponds to matroid.N_ELEMENTS, ranging from 0 to N_ELEMENTS-1.
+- matroid:                The matroid whose augmented Chow ring has been computed. It is
+                          represented as a polymake Matroid.
+"""
+struct MAugChowRing
+    chow_ring # TODO Add types here.
+    flat_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}
+    element_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}
     matroid::pm.BigObject
 end
 
@@ -68,6 +95,42 @@ struct MChowRingHomorphism
 end
 
 """
+    struct MAugChowRingHomorphism
+
+Represents a homorphism which sends the RHS of an augmentedChow ring direct sum
+decomposition to the LHS of the decompositon.
+
+Note that the right hand side of the decomposition is not represented as
+subalgebras of CH_aug(M), but as (augmented) Chow rings which are isomorphic to the 
+subalgebras of CH_aug(M). If you wish to turn an element on the RHS to one
+which lives in the domain of the LHS, you need to use this structure.
+
+This structure represents the morphism:
+
+first_term_morphism + coloop_term_morphism + sum_((projection_1, projection_2, term)) term * projection_1 * projection 2
+
+Where g_f,h_f are projections from CH(M_F+1) and CH_aug(M^F), respectively, to CH_aug(M-i).
+The input to g_f and h_f would then be values in the corresponding tuple in MAugChowRingDecomp.
+
+Fields:
+- first_term_morphism:  Sends elements of the first_term into the LHS.
+- second_term_morphism: A vector of tuples of morphisms and a term x_(F+i), written
+                        as (projection_1, projection_2, x_(F+i)). Each tuple represents
+                        the psi described in Propositon 2.24 of Tom Braden et. al.
+                        It is used in as isomorphism in the direct sum decompsotion, see
+                        Propositon 3.5. It can be seen as the product of two projections, a theta_i
+                        along with a constant term. I.e. as term * projection_1 * projection_2.
+                        Here projection_2 already contains the theta_i.
+- coloop_term_morphism: An optional morphism, that sends members of the
+                        coloopterm into the LHS. Equal to X_(E-i) * theta_i
+"""
+struct MAugChowRingHomorphism
+    first_term_morphism
+    second_term_morphism
+    coloop_term_morphism
+end
+
+"""
     struct MChowRingDecomp
 Represents a direct sum decomposition of the Chow ring of a matroid. See
 "A semi-small decomposition of the Chow ring of a matroid by Braden et. al" for
@@ -99,7 +162,42 @@ struct MChowRingDecomp #TODO Add types here.
     first_term::MChowRing
     second_term
     coloopterm
-    homomorphism::MChowRingHomorphism #TODO: Rename this "isomorphism"?
+    homomorphism::MChowRingHomorphism
+end
+
+"""
+    struct MAugChowRingDecomp
+Represents a direct sum decomposition of the augmented Chow ring of a matroid. See
+"A semi-small decomposition of the Chow ring of a matroid by Braden et. al" for
+details. The result of a direct_sum_decomp call.
+
+Note that the right hand side of the decomposition is not represented as
+subalgebras of CH_aug(M), but as Chow rings which are isomorphic to the subalgebras
+of CH_aug(M). If you wish to turn an element on the RHS to one which lives in the
+domain of the LHS, you need to use the homomorphism field.
+
+Fields:
+- deleted_element: The element which was deleted on the RHS of the decomposition.
+- chow_ring_LHS:   The augmented Chow ring which was decomposed.
+- first_term:      Always present part of the decomposition, equal to the augmented Chow
+                   ring of M-i.
+- second_term:     A vector of tuples of chow rings. This has varying length,
+                   and each tuple is of the form (CH(M_(F+i)), CH_aug(M^F), where
+                   i is the deleted element, and F is a flat. This is the part
+                   of the decomposition indexed by the S_i in the paper.
+- coloopterm:      A term that appears in the decomposition if deleted_element
+                   is a coloop. Equal to the chow ring of M-i if present.
+- homomorphism:    Represents the homomorphism which takes a combination of
+                   elements from the first/second_term/coloop_term and maps it
+                   to the LHS of the decomposition.
+"""
+struct MAugChowRingDecomp #TODO Add types here.
+    deleted_element::Int64
+    chow_ring_LHS::MAugChowRing
+    first_term::MAugChowRing
+    second_term
+    coloopterm
+    homomorphism::MAugChowRingHomorphism
 end
 
 
@@ -221,8 +319,6 @@ true
 true
 true
 true
-
-
 '''
 
 The above code says that the direct sum decomposition of the fano matroid consists of only
@@ -599,8 +695,30 @@ function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
     MChowRing(chow_ring, projected_indeterminates, matroid)
 end
 
-# TODO: Document and add example.
-function augmented_matroid_chow_ring(matroid::pm.BigObject)
+"""
+    augmented_matroid_chow_ring(matroid::pm.BigObject)::MAugChowRing
+
+Computes the augmented Chow ring of a matroid. It follows the convention of the chow ring as defined
+in 'A SEMI-SMALL DECOMPOSITION OF THE CHOW RING OF A MATROID' by Tom Braden, June Huh et. al.
+The chow ring is represented over the rationals, and proper flats and matroid groundset elements 
+enter as variables.
+
+This function accepts any loopless matroid as input, where the matroid is a polymake matroid. 
+It returns the Chow ring described as a quitotent ring, and it does not precompute more than
+it needs to. In particular, if you do any calculations on the ring, then you will likely need
+to wait a bit the first time as it will likely compute a Gröbner basis.
+
+# Example
+'''julia-repl
+julia> using Oscar
+julia> using MatroidChowRings
+julia> fano_matroid = Polymake.matroid.fano_matroid();
+julia> chow_ring = augmented_matroid_chow_ring(fano_matroid);
+
+'''
+
+"""
+function augmented_matroid_chow_ring(matroid::pm.BigObject)::MAugChowRing
     if pm.type_name(matroid) != "Matroid"
         throw(ArgumentError("BigObject is not a matroid."))
     end
@@ -624,12 +742,12 @@ function augmented_matroid_chow_ring(matroid::pm.BigObject)
     generators = vcat(type_i_polynomials, type_j_polynomials)
 
     chow_modulus = ideal(base_ring, generators)
-    # Add std(ideal) to compute standard basis?
     chow_ring, projection = quo(base_ring, chow_modulus)
 
     projected_element_vars = [projection(matroid_element_var) for matroid_element_var in matroid_element_vars]
     projected_flat_vars = [projection(flat_var) for flat_var in flat_vars]
-    chow_ring, projected_element_vars, projected_flat_vars
+
+    MAugChowRing(chow_ring, projected_flat_vars, projected_element_vars, matroid)
 end
 
 
