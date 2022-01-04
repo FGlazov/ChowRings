@@ -213,7 +213,7 @@ Matroid element is a number from 0 to matroid.NR_ELEMENTS-1, inclusive.
 The matroid element is the one which is removed in the decomposition.
 
 # Example
-'''julia-repl
+```julia-repl
 julia> using Oscar
 julia> using MatroidChowRings
 julia> f8 = Polymake.matroid.f8_matroid();
@@ -226,7 +226,7 @@ julia> length(decomp.second_term)
 10
 julia> decomp.coloopterm == nothing
 true
-'''
+```
 
 Note that the length of the gens corresponds to the number of nonempty proper flats.
 The 56 and 45 above say that the matroid corresponding to f8 delete 3 has 13 less flats.
@@ -268,7 +268,7 @@ matroid_element   the matroid element to be removed in the decomposition.
 
 # Example
 
-'''julia-repl
+```julia-repl
 julia> using Oscar
 julia> using MatroidChowRings
 julia> fano_matroid = Polymake.matroid.fano_matroid();
@@ -319,7 +319,7 @@ true
 true
 true
 true
-'''
+```
 
 The above code says that the direct sum decomposition of the fano matroid consists of only
 one component which is isomorphic to matroid you get by deleting any element from the fano
@@ -629,7 +629,7 @@ it needs to. In particular, if you do any calculations on the ring, then you wil
 to wait a bit the first time as it will likely compute a Gröbner basis
 
 # Example
-'''julia-repl
+```julia-repl
 julia> using Oscar
 julia> using MatroidChowRings
 julia> fano_matroid = Polymake.matroid.fano_matroid();
@@ -660,8 +660,7 @@ julia> x = chow_ring.indeterminates
  -x__3_5_6^2
  julia> x[1] * x[11]
  0
-
-'''
+```
 
 """
 function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
@@ -709,7 +708,7 @@ it needs to. In particular, if you do any calculations on the ring, then you wil
 to wait a bit the first time as it will likely compute a Gröbner basis.
 
 # Example
-'''julia-repl
+```julia-repl
 julia> using Oscar
 julia> using MatroidChowRings
 julia> fano_matroid = Polymake.matroid.fano_matroid();
@@ -741,10 +740,17 @@ julia> y = chow_ring.element_indeterminates
  y_4
  y_5
  y_6
- julia> x[9]
+julia> y[1] * y[1]
+0
+julia> y[1] * y[2]
+-x__6^2 - 4*x__6*x__3_5_6 - x__2_4_6^2 - x__3_5_6^2
+julia> x[9]
 x__0_3_4
-
-'''
+julia> y[1] * x[9]
+-x__0*x__0_1_6 - x__0_3_4^2
+julia> y[2] * x[9]
+0
+```
 
 """
 function augmented_matroid_chow_ring(matroid::pm.BigObject)::MAugChowRing
