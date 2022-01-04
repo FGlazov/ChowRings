@@ -8,6 +8,8 @@ using Oscar;
 const pm = Polymake;
 
 """
+    struct MChowRing
+
 Represents a matroid Chow ring. The result of a matroid_chow_ring call.
 
 Fields
@@ -30,6 +32,8 @@ struct MChowRing
 end
 
 """
+    struct MChowRingHomorphism
+
 Represents a homorphism which sends the RHS of a Chow ring direct sum
 decomposition to the LHS of the decompositon.
 
@@ -64,6 +68,7 @@ struct MChowRingHomorphism
 end
 
 """
+    struct MChowRingDecomp
 Represents a direct sum decomposition of the Chow ring of a matroid. See
 "A semi-small decomposition of the Chow ring of a matroid by Braden et. al" for
 details. The result of a direct_sum_decomp call.
@@ -80,7 +85,8 @@ Fields:
                    ring of M-i.
 - second_term:     A vector of tuples of chow rings. This has varying length,
                    and each tuple is of the form (CH(M_(F+i)), CH(M^F), where
-                   i is the deleted element, and F is a flat.
+                   i is the deleted element, and F is a flat. This is the part
+                   of the decomposition indexed by the S_i in the paper.
 - coloopterm:      A term that appears in the decomposition if deleted_element
                    is a coloop. Equal to the chow ring of M-i if present.
 - homomorphism:    Represents the homomorphism which takes a combination of
@@ -100,7 +106,7 @@ end
 """
     function direct_sum_decomp(matroid::pm.BigObject, matroid_element::Int64)
 
-Convinience function to compute the direct sum decomposition of the chow ring of a matroid without
+Convinience function to compute the direct sum decomposition of the Chow ring of a matroid without
 first explicitely computing the chow ring itself. See documentation of the same function applied
 to a chow ring of type MChowRing for more details.
 
@@ -114,7 +120,23 @@ julia> using Oscar
 julia> using MatroidChowRings
 julia> f8 = Polymake.matroid.f8_matroid();
 julia> decomp = direct_sum_decomp(f8, 3);
+julia> length(gens(decomp.chow_ring_LHS.chow_ring))
+56
+julia> length(gens(decomp.first_term.chow_ring))
+45
+julia> length(decomp.second_term)
+10
+julia> decomp.coloopterm == nothing
+true
 '''
+
+Note that the length of the gens corresponds to the number of nonempty proper flats.
+The 56 and 45 above say that the matroid corresponding to f8 delete 3 has 13 less flats.
+
+Each element of decomp.second_term corresponds to a flat F, such that F+3 is also a flat.
+Thus the length 10 says that there are 10 such choices for F.
+
+f8 has no coloops, so the coloopterm must be empty.
 """
 function direct_sum_decomp(matroid::pm.BigObject, matroid_element::Int64)
     direct_sum_decomp(matroid_chow_ring(matroid), matroid_element)
@@ -122,9 +144,97 @@ end
 
 # TODO: Implement an augmented version of this.
 """
-Computes the 
+    function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
+
+Computes the (semi-small) direct sum decomposition of the Chow ring of a matroid, as first described 
+in 'A SEMI-SMALL DECOMPOSITION OF THE CHOW RING OF A MATROID' by Tom Braden, June Huh et. al.
+
+Due to technical reasons the decomposition is not represented as
+subalgebras of CH(M), but as Chow rings which are isomorphic to the subalgebras
+of CH(M). Meaning that instead of a direct sum decomposition, this function instead
+returns all the (isomorphic) components of the decomposition.
+
+If you wish to instead recover the associated subalgebras, the output of this function also
+contains the relevant pushforward map, which takes an element from the product of all the
+isomoprhic components of the decomposition, and maps it to an element of the matroid chow ring
+in the image. By then mapping a set of generators in the isomorphic component, you can get the
+corresponding generators of the subalgebra. See the function apply_homorphism for details.
+
+Note that because polymake reindexes matroid elements to always run from 0 to n-1, an indeterminate
+of the form e.g x_1_3_5 need not correspond to x_1_3_5 in the original matroid. In particular, if
+3 was removed in the construction of the smaller matroid. The function apply_homorphism accounts for
+the reindexing.
+
+chow_ring         the result of a direct_sum_decomp call
+matroid_element   the matroid element to be removed in the decomposition.
+
+# Example
+
+'''julia-repl
+julia> using Oscar
+julia> using MatroidChowRings
+julia> fano_matroid = Polymake.matroid.fano_matroid();
+julia> chow_ring =  matroid_chow_ring(fano_matroid);
+julia> x = chow_ring.indeterminates;
+julia> decomp = direct_sum_decomp(chow_ring, 0);
+julia> length(decomp.first_term.indeterminates)
+13
+julia> length(decomp.second_term)
+0
+julia> decomp.coloopterm == nothing
+true
+julia> morphism = decomp.homomorphism.first_term_morphism;
+julia> isbijective(morphism)
+true
+julia> morphism.image
+13-element Vector{MPolyQuoElem{fmpq_mpoly}}:
+ x__6 - x__1_2_3 - x__1_4_5 + x__2_4_6 + x__3_5_6
+ x__6 - x__0_2_5 + x__0_1_6 - x__1_2_3 + x__3_5_6
+ x__6 - x__0_3_4 + x__0_1_6 - x__1_2_3 + x__2_4_6
+ x__6 - x__0_3_4 + x__0_1_6 - x__1_4_5 + x__3_5_6
+ x__6 - x__0_2_5 + x__0_1_6 - x__1_4_5 + x__2_4_6
+ x__6
+ x__1_2_3
+ x__1_4_5
+ x__0_1_6
+ x__0_2_5
+ x__2_4_6
+ x__0_3_4
+ x__3_5_6
+ julia> for img_gen in morphism.image
+           if img_gen in x
+               print(true,"\n")
+           else
+               print(false,"\n")
+           end
+       end
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true
 
 
+'''
+
+The above code says that the direct sum decomposition of the fano matroid consists of only
+one component which is isomorphic to matroid you get by deleting any element from the fano
+matroid. This means that the pushforward map is very simple - it is composed of a single
+algebraic homomorphism. One can directly verify that this is indeed a decomposition by
+checking that this algerbraic homoprhism is isomorphic.
+
+The for loop proves that generators in the RHS of the decomposition get mapped to generators
+in the Chow ring of the Fano matroid. This paired with the fact that the morphism is isomorphic,
+shows that the natural set of generators for the Fano matroid contain redudant elements, in particular
+there is a generating set of length 13.
 """
 function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
     # TODO: Check bounds of matroid element.
@@ -380,7 +490,7 @@ subalgebras of CH(M), but as Chow rings which are isomorphic to the subalgebras
 of CH(M). If you wish to turn an element on the RHS to one which lives in the
 domain of the LHS, you need to use this structure.
 
-So using this function you can instead recover an element which truely does
+So using this function you can instead recover an element which truly does
 belong to the original CH(M).
 
 Note that the fields here are strongly correlated. The chow_ring_hom must be a
