@@ -714,6 +714,35 @@ julia> using Oscar
 julia> using MatroidChowRings
 julia> fano_matroid = Polymake.matroid.fano_matroid();
 julia> chow_ring = augmented_matroid_chow_ring(fano_matroid);
+julia> x = chow_ring.flat_indeterminates
+15-element Vector{MPolyQuoElem{fmpq_mpoly}}:
+ x__
+ x__0
+ x__1
+ x__2
+ x__3
+ x__4
+ x__5
+ x__6
+ x__0_3_4
+ x__0_2_5
+ x__0_1_6
+ x__1_2_3
+ x__1_4_5
+ x__2_4_6
+ x__3_5_6
+
+julia> y = chow_ring.element_indeterminates
+7-element Vector{MPolyQuoElem{fmpq_mpoly}}:
+ y_0
+ y_1
+ y_2
+ y_3
+ y_4
+ y_5
+ y_6
+ julia> x[9]
+x__0_3_4
 
 '''
 
@@ -822,7 +851,9 @@ function generate_augmented_type_i_ideal(proper_flats, matroid_element_vars, fla
             flat = extract_flat(proper_flats, j)
             # TODO: There must be some much quicker way to access this.
             # I.e. some way to get all rows quickly which don't contain a given element.
-            if !Polymake.in(i, flat)
+
+            # -1 since the matroid_element_vars are y_0, y_1, .., y_n-1
+            if !Polymake.in(i-1, flat)
                 ideal_polynomials[i] -= flat_vars[j]
             end
         end
@@ -862,7 +893,9 @@ function generate_augmented_type_j_ideal(proper_flats, matroid_element_vars, fla
         for j in 1:length(matroid_element_vars)
             # TODO: There must be some much quicker way to access this.
             # I.e. some way to get all rows quickly which don't contain a given element.
-            if !Polymake.in(j, flat)
+
+            # -1 since the matroid_element_vars are y_0, y_1, .., y_n-1
+            if !Polymake.in(j - 1, flat)
                 push!(xy_polynomials, matroid_element_vars[j] * flat_vars[i])
             end
         end
