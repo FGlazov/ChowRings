@@ -14,7 +14,7 @@ Represents a matroid Chow ring. The result of a matroid_chow_ring call.
 
 Fields
 - chow_ring:      The Chow ring of the matroid, represented as an affine algebra.
-                  It may be == None, in that case chow ring is trivial (= 0).
+                  It may be == None, in that case chow ring is QQ.
 - indeterminates: The indeterminates of the chow ring. These are of the form
                   x_F, where F is a nonempty proper flat. The name of F
                   corresponds to elements inside that flat. E.g. x__1_5_7 would
@@ -38,13 +38,13 @@ Represents am augmented matroid Chow ring. The result of a augmented_matroid_cho
 
 Fields
 - chow_ring:              The augmented Chow ring of the matroid, represented as an affine algebra.
-                          It may be == None, in that case chow ring is trivial (= 0).
+                          It may be == None, in that case chow ring is QQ.
 - flat_indeterminates:    The flat indeterminates of the augmented Chow ring. These are of the form
                           x_F, where F is a proper flat. The name of F corresponds to elements inside
                            that flat. E.g. x__1_5_7 would be the flat consisting of the 
                           elements 1, 5, and 7. Another way to see all the flats would be to call
                           matroid.LATTICE_OF_FLATS.FACES.
-                          This vector may be empty, in that case the chow ring is trivial.
+                          This vector may be empty, in that case the chow ring is QQ.
 - element_indeterminates: The indeterminates of the augmented Chow ring. These are of the form y_i,
                           where i is an element of the groundset of the matroid. The number of these
                           corresponds to matroid.N_ELEMENTS, ranging from 0 to N_ELEMENTS-1.
@@ -378,7 +378,7 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
 
                 projection_1 = create_projection(chow_1, chow_ring, to_remove_1, matroid_element, true)
                 projection_2 = create_projection(chow_2, chow_ring, to_remove_2, matroid_element, false)
-                term = find_flat_variable(first_term, proper_flat_copy)
+                term = find_flat_variable(chow_ring, proper_flat_copy)
                 push!(second_term_morphism, (projection_1, projection_2, term))
             end
         end
@@ -589,13 +589,56 @@ domain of the LHS, you need to use this structure.
 So using this function you can instead recover an element which truly does
 belong to the original CH(M).
 
-Note that the fields here are strongly correlated. The chow_ring_hom must be a
-MChowRingHomorphism from some MChowRingDecomp.
+chow_ring_hom must be the homorphism which comes as one of the return values
+of direct_sum_decomp.
 
 The first_term field must be an element inside the first_term of MChowRingDecomp.
 The second_term must be a vector of 2-tuples, containing elements of the
 second_term of the corresponding second_term of a MChowRingDecomp, in the same
 order as they are in MChowRingDecomp.
+
+# Example
+
+```julia-repl
+julia> using Oscar
+julia> using MatroidChowRings
+julia> u45 = Polymake.matroid.uniform_matroid(4,5);
+julia> decomp = direct_sum_decomp(u45, 2);
+julia> length(decomp.second_term)
+10
+julia> decomp.coloopterm == nothing
+true
+julia> p1 = decomp.first_term.indeterminates[2] + decomp.first_term.indeterminates[1]
+x__0 + x__1
+julia> p2s = [];
+julia> for (t1, t2) in decomp.second_term
+           x1 = 1
+           x2 = 1
+           if length(t1.indeterminates) > 0
+               x1 = t1.indeterminates[1]
+           end
+           if length(t2.indeterminates) > 0
+               x2 = t2.indeterminates[2]
+           end
+
+           push!(p2s, (x1, x2))
+       end
+julia> p2s
+10-element Vector{Any}:
+(x__0, 1)
+(x__0, 1)
+(x__0, 1)
+(x__0, 1)
+(1, x__1)
+(1, x__1)
+(1, x__1)
+(1, x__1)
+(1, x__1)
+(1, x__1)
+julia> p3 = nothing;
+julia> apply_homorphism(decomp.homomorphism, p1, p2s, p3)
+2*x__4 - x__0_1*x__0_1_4 - 2*x__0_1 + x__0_2*x__0_2_4 - x__0_3*x__0_3_4 - x__0_3 - x__0_4*x__0_3_4 + x__0_4 + x__1_2*x__1_2_4 - x__1_3*x__1_3_4 - x__1_3 - x__1_4*x__1_3_4 + x__1_4 + x__2_3*x__2_3_4 + x__2_4*x__2_3_4 + 2*x__2_4 - x__3_4*x__2_3_4 + 2*x__3_4 - x__0_1_2^2 - 2*x__0_1_2 - 2*x__0_1_3 - x__0_2_3^2 - x__0_2_3 - x__0_2_4^2 + x__0_2_4 + x__0_3_4 - x__1_2_3^2 - x__1_2_3 - x__1_2_4^2 + x__1_2_4 + x__1_3_4 - x__2_3_4^2 + 2*x__2_3_4
+```
 
 """
 function apply_homorphism(chow_ring_hom::MChowRingHomorphism, first_term, second_term, coloop_term)
@@ -605,7 +648,16 @@ function apply_homorphism(chow_ring_hom::MChowRingHomorphism, first_term, second
     for (contracted_term, deleted_term) in second_term
         projection_1, projection_2, term = chow_ring_hom.second_term_morphism[i]
 
-        result +=  term * projection_1(contracted_term) * projection_2(deleted_term)
+        mapped_contracted_term = contracted_term
+        mapped_deleted_term = deleted_term
+        if projection_1 != nothing
+            mapped_contracted_term = projection_1(contracted_term)
+        end
+        if projection_2 != nothing
+            mapped_deleted_term = projection_2(deleted_term)
+        end
+
+        result +=  term * mapped_contracted_term * mapped_deleted_term
         i += 1
     end
 
