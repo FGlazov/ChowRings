@@ -41,7 +41,7 @@ Fields
                           It may be == None, in that case chow ring is QQ.
 - flat_indeterminates:    The flat indeterminates of the augmented Chow ring. These are of the form
                           x_F, where F is a proper flat. The name of F corresponds to elements inside
-                           that flat. E.g. x__1_5_7 would be the flat consisting of the 
+                           that flat. E.g. x__1_5_7 would be the flat consisting of the
                           elements 1, 5, and 7. Another way to see all the flats would be to call
                           matroid.LATTICE_OF_FLATS.FACES.
                           This vector may be empty, in that case the chow ring is QQ.
@@ -101,7 +101,7 @@ Represents a homorphism which sends the RHS of an augmentedChow ring direct sum
 decomposition to the LHS of the decompositon.
 
 Note that the right hand side of the decomposition is not represented as
-subalgebras of CH_aug(M), but as (augmented) Chow rings which are isomorphic to the 
+subalgebras of CH_aug(M), but as (augmented) Chow rings which are isomorphic to the
 subalgebras of CH_aug(M). If you wish to turn an element on the RHS to one
 which lives in the domain of the LHS, you need to use this structure.
 
@@ -244,7 +244,7 @@ end
 """
     function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
 
-Computes the (semi-small) direct sum decomposition of the Chow ring of a matroid, as first described 
+Computes the (semi-small) direct sum decomposition of the Chow ring of a matroid, as first described
 in 'A SEMI-SMALL DECOMPOSITION OF THE CHOW RING OF A MATROID' by Tom Braden, June Huh et. al.
 
 Due to technical reasons the decomposition is not represented as
@@ -339,10 +339,11 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
     first_term = matroid_chow_ring(pm.matroid.deletion(matroid, matroid_element))
     first_term_morphism = create_theta_i(first_term, chow_ring, matroid_element)
 
-    ground_set = Polymake.Set(range(0, matroid.N_ELEMENTS - 1,step=1))
+    ground_set = Polymake.Set(range(0, matroid.N_ELEMENTS - 1, step=1))
     flats = matroid.LATTICE_OF_FLATS.FACES
     flats = pm.@pm common.convert_to{IncidenceMatrix}(flats)
     proper_flats = flats[2:pm.size(flats, 1)-1, 1:pm.size(flats,2)]
+    transposed_proper_flats = Polymake.transpose(flats)
     n_proper_flats = pm.size(proper_flats, 1)
 
     flat_canidates = []
@@ -675,7 +676,7 @@ Computes the Chow ring of a matroid. It follows the convention of the chow ring 
 in 'A SEMI-SMALL DECOMPOSITION OF THE CHOW RING OF A MATROID' by Tom Braden, June Huh et. al.
 The chow ring is represented over the rationals, and only nonempty proper flats enter as variables.
 
-This function accepts any loopless matroid as input, where the matroid is a polymake matroid. 
+This function accepts any loopless matroid as input, where the matroid is a polymake matroid.
 It returns the Chow ring described as a quitotent ring, and it does not precompute more than
 it needs to. In particular, if you do any calculations on the ring, then you will likely need
 to wait a bit the first time as it will likely compute a Gröbner basis
@@ -751,10 +752,10 @@ end
 
 Computes the augmented Chow ring of a matroid. It follows the convention of the chow ring as defined
 in 'A SEMI-SMALL DECOMPOSITION OF THE CHOW RING OF A MATROID' by Tom Braden, June Huh et. al.
-The chow ring is represented over the rationals, and proper flats and matroid groundset elements 
+The chow ring is represented over the rationals, and proper flats and matroid groundset elements
 enter as variables.
 
-This function accepts any loopless matroid as input, where the matroid is a polymake matroid. 
+This function accepts any loopless matroid as input, where the matroid is a polymake matroid.
 It returns the Chow ring described as a quitotent ring, and it does not precompute more than
 it needs to. In particular, if you do any calculations on the ring, then you will likely need
 to wait a bit the first time as it will likely compute a Gröbner basis.
@@ -883,14 +884,13 @@ function generate_type_i_ideal(base_ring, proper_flats, indeterminates, matroid)
         for j in i+1:n-1
             ij_polynomial = base_ring() # Create zero.
             ij_set = Set{Int64}([i,j])
-            for flat_index in 1:n_proper_flats
-                proper_flat = extract_flat(proper_flats, flat_index)
-                if pm.in(i, proper_flat)
-                    ij_polynomial += indeterminates[flat_index]
-                end
-                if pm.in(j, proper_flat)
-                    ij_polynomial -= indeterminates[flat_index]
-                end
+
+            for i_index in true_indices_in_col(proper_flats, i + 1)
+                ij_polynomial += indeterminates[i_index]
+            end
+
+            for j_index in true_indices_in_col(proper_flats, j + 1)
+                ij_polynomial -= indeterminates[j_index]
             end
             push!(ideal_polynomials, ij_polynomial)
         end
@@ -903,17 +903,14 @@ function generate_augmented_type_i_ideal(proper_flats, matroid_element_vars, fla
     n_proper_flats = pm.size(proper_flats, 1)
     ideal_polynomials = Array{fmpq_mpoly}(undef, length(matroid_element_vars))
 
+    ground_set = Polymake.Set(range(1, length(matroid_element_vars), step=1))
+
+
     for i in 1:length(matroid_element_vars)
         ideal_polynomials[i] = matroid_element_vars[i]
-        for j in 1:n_proper_flats
-            flat = extract_flat(proper_flats, j)
-            # TODO: There must be some much quicker way to access this.
-            # I.e. some way to get all rows quickly which don't contain a given element.
 
-            # -1 since the matroid_element_vars are y_0, y_1, .., y_n-1
-            if !Polymake.in(i-1, flat)
-                ideal_polynomials[i] -= flat_vars[j]
-            end
+        for flat_index_no_i in false_indices_in_col(proper_flats, i)
+            ideal_polynomials[i] -= flat_vars[flat_index_no_i]
         end
     end
 
@@ -942,23 +939,15 @@ end
 
 function generate_augmented_type_j_ideal(proper_flats, matroid_element_vars, flat_vars)
     n_proper_flats = pm.size(proper_flats, 1)
-
     incomparable_polynomials = generate_type_j_ideal(proper_flats, flat_vars)
-
     xy_polynomials = Vector{fmpq_mpoly}()
-    for i in 1:n_proper_flats
-        flat = extract_flat(proper_flats, i)
-        for j in 1:length(matroid_element_vars)
-            # TODO: There must be some much quicker way to access this.
-            # I.e. some way to get all rows quickly which don't contain a given element.
 
-            # -1 since the matroid_element_vars are y_0, y_1, .., y_n-1
-            if !Polymake.in(j - 1, flat)
-                push!(xy_polynomials, matroid_element_vars[j] * flat_vars[i])
-            end
+    for i in 1:length(matroid_element_vars)
+        for j in false_indices_in_col(proper_flats, i)
+            push!(xy_polynomials, matroid_element_vars[i] * flat_vars[j])
         end
     end
-
+    
     vcat(incomparable_polynomials, xy_polynomials)
 
 end
@@ -1001,6 +990,16 @@ function extract_flat(flats, index)
     end
 
     Polymake.Set(result)
+end
+
+function true_indices_in_col(matrix, index)
+     Polymake.SparseArrays.nonzeroinds(matrix[:,index])
+end
+
+function false_indices_in_col(matrix, index)
+     to_complement = true_indices_in_col(matrix, index)
+     ground_set = Polymake.Set(range(1, Polymake.nrows(matrix), step=1))
+     set_complement(ground_set, to_complement)
 end
 
 end
