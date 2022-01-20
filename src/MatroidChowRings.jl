@@ -347,41 +347,37 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
     n_proper_flats = pm.size(proper_flats, 1)
 
     flat_canidates = []
-    # TODO: I'm sure this can be done MUCH faster using the IncidenceMatrix stucture.
-    # That way, we can turn a "O(2*n)" pass into a "O(n) + O(log n)" pass
-    for flat_index in 1:n_proper_flats
+
+    for flat_index in true_indices_in_col(proper_flats, matroid_element + 1)
         proper_flat = extract_flat(proper_flats, flat_index)
-        if Polymake.in(matroid_element, proper_flat)
-            push!(flat_canidates, proper_flat)
-        end
+        push!(flat_canidates, proper_flat)
     end
     flat_canidates = Set(flat_canidates)
 
     # This loop might be a good candiate for parralelization.
     second_term = []
     second_term_morphism = []
-    for flat_index in 1:n_proper_flats
+
+    for flat_index in false_indices_in_col(proper_flats, matroid_element + 1)
         proper_flat = extract_flat(proper_flats, flat_index)
-        if !Polymake.in(matroid_element, proper_flat)
-            proper_flat_copy = copy(proper_flat)
-            push!(proper_flat_copy, matroid_element)
-            if proper_flat_copy in flat_canidates
-                to_remove_1 = proper_flat_copy
-                to_remove_2 = set_complement(ground_set, proper_flat)
+        proper_flat_copy = copy(proper_flat)
+        push!(proper_flat_copy, matroid_element)
+        if proper_flat_copy in flat_canidates
+            to_remove_1 = proper_flat_copy
+            to_remove_2 = set_complement(ground_set, proper_flat)
 
-                matroid_1 = pm.matroid.contraction(matroid, to_remove_1)
-                matroid_2 = pm.matroid.deletion(matroid, to_remove_2)
+            matroid_1 = pm.matroid.contraction(matroid, to_remove_1)
+            matroid_2 = pm.matroid.deletion(matroid, to_remove_2)
 
-                chow_1 = matroid_chow_ring(matroid_1)
-                chow_2 = matroid_chow_ring(matroid_2)
+            chow_1 = matroid_chow_ring(matroid_1)
+            chow_2 = matroid_chow_ring(matroid_2)
 
-                push!(second_term, (chow_1, chow_2))
+            push!(second_term, (chow_1, chow_2))
 
-                projection_1 = create_projection(chow_1, chow_ring, to_remove_1, matroid_element, true)
-                projection_2 = create_projection(chow_2, chow_ring, to_remove_2, matroid_element, false)
-                term = find_flat_variable(chow_ring, proper_flat_copy)
-                push!(second_term_morphism, (projection_1, projection_2, term))
-            end
+            projection_1 = create_projection(chow_1, chow_ring, to_remove_1, matroid_element, true)
+            projection_2 = create_projection(chow_2, chow_ring, to_remove_2, matroid_element, false)
+            term = find_flat_variable(chow_ring, proper_flat_copy)
+            push!(second_term_morphism, (projection_1, projection_2, term))
         end
     end
 
@@ -947,7 +943,7 @@ function generate_augmented_type_j_ideal(proper_flats, matroid_element_vars, fla
             push!(xy_polynomials, matroid_element_vars[i] * flat_vars[j])
         end
     end
-    
+
     vcat(incomparable_polynomials, xy_polynomials)
 
 end
