@@ -2,7 +2,9 @@
 
 module MatroidChowRings
 
-export direct_sum_decomp, matroid_chow_ring, augmented_matroid_chow_ring, apply_homorphism
+export direct_sum_decomp, matroid_chow_ring, apply_homorphism
+export augmented_direct_sum_decomp, augmented_matroid_chow_ring
+
 
 using Oscar;
 const pm = Polymake;
@@ -343,11 +345,9 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
     flats = matroid.LATTICE_OF_FLATS.FACES
     flats = pm.@pm common.convert_to{IncidenceMatrix}(flats)
     proper_flats = flats[2:pm.size(flats, 1)-1, 1:pm.size(flats,2)]
-    transposed_proper_flats = Polymake.transpose(flats)
     n_proper_flats = pm.size(proper_flats, 1)
 
     flat_canidates = []
-
     for flat_index in true_indices_in_col(proper_flats, matroid_element + 1)
         proper_flat = extract_flat(proper_flats, flat_index)
         push!(flat_canidates, proper_flat)
@@ -399,6 +399,73 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
 
 end
 
+function augmented_direct_sum_decomp(matroid::pm.BigObject, matroid_element::Int64)
+    augmented_direct_sum_decomp(augmented_matroid_chow_ring(matroid), matroid_element)
+end
+
+function augmented_direct_sum_decomp(chow_ring::MAugChowRing, matroid_element::Int64)
+    # TODO: Check bounds of matroid element.
+    matroid = chow_ring.matroid
+    first_term = augmented_matroid_chow_ring(pm.matroid.deletion(matroid, matroid_element))
+    # TODO: Make morphism!
+
+    ground_set = Polymake.Set(range(0, matroid.N_ELEMENTS - 1, step=1))
+    flats = matroid.LATTICE_OF_FLATS.FACES
+    flats = pm.@pm common.convert_to{IncidenceMatrix}(flats)
+
+    # Technically non-empty proper flats. First element is either empty or the whole set, last element is the other of the two.
+    proper_flats = flats[2:pm.size(flats, 1)-1, 1:pm.size(flats,2)]
+    top_node = matroid.LATTICE_OF_FLATS.TOP_NODE
+    if top_node == 0
+        proper_flats = flats[2:pm.size(flats, 1), 1:pm.size(flats,2)]
+    else
+        proper_flats = flats[1:pm.size(flats, 1)-1, 1:pm.size(flats,2)]
+    end
+
+    flat_canidates = []
+    for flat_index in true_indices_in_col(proper_flats, matroid_element + 1)
+        proper_flat = extract_flat(proper_flats, flat_index)
+        push!(flat_canidates, proper_flat)
+    end
+
+    # This loop might be a good candiate for parralelization.
+    second_term = []
+    second_term_morphism = []
+
+    for flat_index in false_indices_in_col(proper_flats, matroid_element + 1)
+        proper_flat = extract_flat(proper_flats, flat_index)
+        proper_flat_copy = copy(proper_flat)
+        push!(proper_flat_copy, matroid_element)
+        if proper_flat_copy in flat_canidates
+            to_remove_1 = proper_flat_copy
+            to_remove_2 = set_complement(ground_set, proper_flat)
+            matroid_1 = pm.matroid.contraction(matroid, to_remove_1)
+            matroid_2 = pm.matroid.deletion(matroid, to_remove_2)
+
+            chow_1 = matroid_chow_ring(matroid_1)
+            chow_2 = augmented_matroid_chow_ring(matroid_2)
+
+            push!(second_term, (chow_1, chow_2))
+
+            # TODO: Make morphism!
+        end
+    end
+
+    coloops = pm.matroid.coloops(matroid)
+    is_coloop = pm.in(matroid_element, coloops)
+    coloop_term = nothing
+    coloop_term_morphism = nothing
+    if is_coloop
+        coloop_term = first_term
+        # TODO: Make morphism!
+    end
+
+    chow_hom = MAugChowRingHomorphism(nothing, second_term_morphism, coloop_term_morphism)
+
+    MAugChowRingDecomp(matroid_element, chow_ring, first_term, second_term, coloop_term, chow_hom)
+end
+
+
 """
 Creates theta_i as described on page 2 of
 "A semi-small decomposition of the Chow ring of a matroid" by Braden et. al,
@@ -426,7 +493,14 @@ end
 Helper function for create_theta_i. Given e.g. domain_gen = x_1_3_5_7 and
 deleted element = 5, it creates the polynomial
 
-x_1_3_6_8 + x_1_3_5_6_8 in the image, where a term is set to 0 if the
+x_1_3_6_8 + x_1_3_5_6_8 in the ima    # Technically non-empty proper flats. First element is either empty or the whole set, last element is the other of the two.
+    proper_flats = flats[2:pm.size(flats, 1)-1, 1:pm.size(flats,2)]
+    top_node = matroid.LATTICE_OF_FLATS.TOP_NODE
+    if top_node == 0
+        proper_flats = flats[2:pm.size(flats, 1), 1:pm.size(flats,2)]
+    else
+        proper_flats = flats[1:pm.size(flats, 1)-1, 1:pm.size(flats,2)]
+    endge, where a term is set to 0 if the
  corresponding variable does not exist in the image.
 """
 function find_gen_image(domain_gen, image::MChowRing, deleted_element::Int64)
@@ -805,6 +879,10 @@ julia> y[2] * x[9]
 function augmented_matroid_chow_ring(matroid::pm.BigObject)::MAugChowRing
     if pm.type_name(matroid) != "Matroid"
         throw(ArgumentError("BigObject is not a matroid."))
+    end
+
+    if matroid.N_ELEMENTS == 0
+        return MAugChowRing(nothing, [], [], matroid)
     end
 
     n_elements = matroid.N_ELEMENTS
