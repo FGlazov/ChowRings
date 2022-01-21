@@ -335,7 +335,10 @@ shows that the natural set of generators for the Fano matroid contain redudant e
 there is a generating set of length 13.
 """
 function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
-    # TODO: Check bounds of matroid element.
+    if matroid_element < 0 || matroid_element >= matroid_element
+        print("Matroid element out of bounds, can not decompose.\n")
+        return nothing
+    end
     matroid = chow_ring.matroid
 
     first_term = matroid_chow_ring(pm.matroid.deletion(matroid, matroid_element))
@@ -353,7 +356,7 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
         push!(flat_canidates, proper_flat)
     end
     flat_canidates = Set(flat_canidates)
-
+# TODO: Add types here. Test it. Add example.
     # This loop might be a good candiate for parralelization.
     second_term = []
     second_term_morphism = []
@@ -404,6 +407,11 @@ function augmented_direct_sum_decomp(matroid::pm.BigObject, matroid_element::Int
 end
 
 function augmented_direct_sum_decomp(chow_ring::MAugChowRing, matroid_element::Int64)
+    if matroid_element < 0 || matroid_element >= matroid_element
+        print("Matroid element out of bounds, can not decompose.\n")
+        return nothing
+    end
+
     # TODO: Check bounds of matroid element.
     matroid = chow_ring.matroid
     first_term = augmented_matroid_chow_ring(pm.matroid.deletion(matroid, matroid_element))
@@ -413,8 +421,6 @@ function augmented_direct_sum_decomp(chow_ring::MAugChowRing, matroid_element::I
     flats = matroid.LATTICE_OF_FLATS.FACES
     flats = pm.@pm common.convert_to{IncidenceMatrix}(flats)
 
-    # Technically non-empty proper flats. First element is either empty or the whole set, last element is the other of the two.
-    proper_flats = flats[2:pm.size(flats, 1)-1, 1:pm.size(flats,2)]
     top_node = matroid.LATTICE_OF_FLATS.TOP_NODE
     if top_node == 0
         proper_flats = flats[2:pm.size(flats, 1), 1:pm.size(flats,2)]
@@ -487,21 +493,18 @@ function create_theta_i(domain::MChowRing, image::MChowRing, deleted_element::In
     hom(domain.chow_ring, image.chow_ring, image_gens)
 end
 
+function create_aug_theta_i(domain::MAugChowRing, image::MAugChowRing, deleted_element::Int64, factor=1)
+    nothing
+end
+
 # TODO: This works... but it's ugly string hacking.
 # One should instead pass around a dict of set ints to variables instead.
 """
 Helper function for create_theta_i. Given e.g. domain_gen = x_1_3_5_7 and
 deleted element = 5, it creates the polynomial
 
-x_1_3_6_8 + x_1_3_5_6_8 in the ima    # Technically non-empty proper flats. First element is either empty or the whole set, last element is the other of the two.
-    proper_flats = flats[2:pm.size(flats, 1)-1, 1:pm.size(flats,2)]
-    top_node = matroid.LATTICE_OF_FLATS.TOP_NODE
-    if top_node == 0
-        proper_flats = flats[2:pm.size(flats, 1), 1:pm.size(flats,2)]
-    else
-        proper_flats = flats[1:pm.size(flats, 1)-1, 1:pm.size(flats,2)]
-    endge, where a term is set to 0 if the
- corresponding variable does not exist in the image.
+x_1_3_6_8 + x_1_3_5_6_8 in the image, where a term is set to 0 if the
+corresponding variable does not exist in the image.
 """
 function find_gen_image(domain_gen, image::MChowRing, deleted_element::Int64)
      elements_in_flat = split(string(domain_gen), "__")[2]
@@ -889,8 +892,6 @@ function augmented_matroid_chow_ring(matroid::pm.BigObject)::MAugChowRing
     flats = matroid.LATTICE_OF_FLATS.FACES
     flats = pm.@pm common.convert_to{IncidenceMatrix}(flats)
 
-    # Technically non-empty proper flats. First element is either empty or the whole set, last element is the other of the two.
-    proper_flats = flats[2:pm.size(flats, 1)-1, 1:pm.size(flats,2)]
     top_node = matroid.LATTICE_OF_FLATS.TOP_NODE
     if top_node == 0
         proper_flats = flats[2:pm.size(flats, 1), 1:pm.size(flats,2)]
