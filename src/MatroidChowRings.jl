@@ -16,7 +16,7 @@ Represents a matroid Chow ring. The result of a matroid_chow_ring call.
 
 Fields
 - chow_ring:      The Chow ring of the matroid, represented as an affine algebra.
-                  It may be == None, in that case chow ring is QQ.
+                  It may be == nothing, in that case chow ring is QQ.
 - indeterminates: The indeterminates of the chow ring. These are of the form
                   x_F, where F is a nonempty proper flat. The name of F
                   corresponds to elements inside that flat. E.g. x__1_5_7 would
@@ -28,9 +28,25 @@ Fields
                   represented as a polymake Matroid.
 """
 struct MChowRing
-    chow_ring # TODO Add types here.
     indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}
     matroid::pm.BigObject
+    chow_ring::MPolyQuo{fmpq_mpoly}
+
+    function MChowRing(indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}, matroid::pm.BigObject)
+        if pm.type_name(matroid) != "Matroid"
+            error("BigObject is not a matroid")
+        end
+
+        new(indeterminates, matroid)
+    end
+
+
+    function MChowRing(indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}, matroid::pm.BigObject, chow_ring)
+        if pm.type_name(matroid) != "Matroid"
+            error("BigObject is not a matroid")
+        end
+        new(indeterminates, matroid, chow_ring)
+    end
 end
 
 """
@@ -40,7 +56,7 @@ Represents am augmented matroid Chow ring. The result of a augmented_matroid_cho
 
 Fields
 - chow_ring:              The augmented Chow ring of the matroid, represented as an affine algebra.
-                          It may be == None, in that case chow ring is QQ.
+                          It may be == nothing, in that case chow ring is QQ.
 - flat_indeterminates:    The flat indeterminates of the augmented Chow ring. These are of the form
                           x_F, where F is a proper flat. The name of F corresponds to elements inside
                            that flat. E.g. x__1_5_7 would be the flat consisting of the
@@ -54,10 +70,25 @@ Fields
                           represented as a polymake Matroid.
 """
 struct MAugChowRing
-    chow_ring # TODO Add types here.
     flat_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}
     element_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}
     matroid::pm.BigObject
+    chow_ring::MPolyQuo{fmpq_mpoly}
+
+    function MAugChowRing(flat_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}, element_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}, matroid::pm.BigObject)
+        if pm.type_name(matroid) != "Matroid"
+            error("BigObject is not a matroid")
+        end
+
+        new(flat_indeterminates, element_indeterminates, matroid)
+    end
+
+    function MAugChowRing(flat_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}, element_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}, matroid::pm.BigObject, chow_ring)
+        if pm.type_name(matroid) != "Matroid"
+            error("BigObject is not a matroid")
+        end
+        new(flat_indeterminates, element_indeterminates, matroid, chow_ring)
+    end
 end
 
 """
@@ -335,7 +366,7 @@ shows that the natural set of generators for the Fano matroid contain redudant e
 there is a generating set of length 13.
 """
 function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
-    if matroid_element < 0 || matroid_element >= matroid_element
+    if matroid_element < 0 || matroid_element >= chow_ring.matroid.N_ELEMENTS
         print("Matroid element out of bounds, can not decompose.\n")
         return nothing
     end
@@ -407,7 +438,7 @@ function augmented_direct_sum_decomp(matroid::pm.BigObject, matroid_element::Int
 end
 
 function augmented_direct_sum_decomp(chow_ring::MAugChowRing, matroid_element::Int64)
-    if matroid_element < 0 || matroid_element >= matroid_element
+    if matroid_element < 0 || matroid_element >= chow_ring.matroid.N_ELEMENTS
         print("Matroid element out of bounds, can not decompose.\n")
         return nothing
     end
@@ -494,7 +525,27 @@ function create_theta_i(domain::MChowRing, image::MChowRing, deleted_element::In
 end
 
 function create_aug_theta_i(domain::MAugChowRing, image::MAugChowRing, deleted_element::Int64, factor=1)
-    nothing
+    image_gens = Vector{MPolyQuoElem{fmpq_mpoly}}(undef, length(gens(domain.chow_ring)))
+    domain_ys = domain.element_indeterminates
+    domain_xs = domain.flat_indeterminates
+    image_xs = image.flat_indeterminates
+
+    for i = 1:length(domain_ys)
+        image_index = i
+        if i > deleted_element
+            image_index += 1
+        end
+        # TODO: Check if factor needs to be here?
+        image_gens[i] = domain_ys[image_index]
+    end
+
+    offset = length(domain_ys)
+    for i = 1:length(domain_xs)
+        domain_gen = domain_xs[i]
+        image_gens[i + offset] = factor * find_gen_image(domain_gen, image, deleted_element)
+    end
+
+    hom(domain.chow_ring, image.chow_ring, image_gens)
 end
 
 # TODO: This works... but it's ugly string hacking.
@@ -802,8 +853,8 @@ function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
     proper_flats = flats[2:pm.size(flats, 1)-1, 1:pm.size(flats,2)]
 
     if length(proper_flats) == 0
-        # TODO: Better representation of trivial ring?
-        return MChowRing(nothing, [], matroid)
+        empty_vector = Vector{MPolyQuoElem{fmpq_mpoly}}()
+        return MChowRing(empty_vector, matroid)
     end
 
     base_ring, indeterminates = generate_base_ring(proper_flats)
@@ -817,7 +868,7 @@ function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
     chow_ring, projection = quo(base_ring, chow_modulus)
     projected_indeterminates = [projection(indeterminate) for indeterminate in indeterminates]
 
-    MChowRing(chow_ring, projected_indeterminates, matroid)
+    MChowRing(projected_indeterminates, matroid, chow_ring)
 end
 
 """
@@ -885,7 +936,8 @@ function augmented_matroid_chow_ring(matroid::pm.BigObject)::MAugChowRing
     end
 
     if matroid.N_ELEMENTS == 0
-        return MAugChowRing(nothing, [], [], matroid)
+        empty_vector = Vector{MPolyQuoElem{fmpq_mpoly}}()
+        return MAugChowRing(empty_vector, empty_vector, matroid)
     end
 
     n_elements = matroid.N_ELEMENTS
@@ -910,7 +962,7 @@ function augmented_matroid_chow_ring(matroid::pm.BigObject)::MAugChowRing
     projected_element_vars = [projection(matroid_element_var) for matroid_element_var in matroid_element_vars]
     projected_flat_vars = [projection(flat_var) for flat_var in flat_vars]
 
-    MAugChowRing(chow_ring, projected_flat_vars, projected_element_vars, matroid)
+    MAugChowRing(projected_flat_vars, projected_element_vars, matroid, chow_ring)
 end
 
 
@@ -931,7 +983,6 @@ function generate_augmented_base_ring(proper_flats, n_elements)
     ring, variables = PolynomialRing( QQ, variable_names);
 
     ring, variables[1:n_elements], variables[n_elements + 1: length(variables)]
-
 end
 
 function create_flat_variables_names(flats)
