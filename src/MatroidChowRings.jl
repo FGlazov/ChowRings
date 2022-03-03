@@ -28,11 +28,11 @@ Fields
                   represented as a polymake Matroid.
 """
 struct MChowRing
-    indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}
+    indeterminates::Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}
     matroid::pm.BigObject
-    chow_ring::MPolyQuo{fmpq_mpoly}
+    chow_ring::MPolyQuo{MPolyElem_dec{fmpq, fmpq_mpoly}}
 
-    function MChowRing(indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}, matroid::pm.BigObject)
+    function MChowRing(indeterminates::Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}, matroid::pm.BigObject)
         if pm.type_name(matroid) != "Matroid"
             error("BigObject is not a matroid")
         end
@@ -41,7 +41,7 @@ struct MChowRing
     end
 
 
-    function MChowRing(indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}, matroid::pm.BigObject, chow_ring)
+    function MChowRing(indeterminates::Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}, matroid::pm.BigObject, chow_ring)
         if pm.type_name(matroid) != "Matroid"
             error("BigObject is not a matroid")
         end
@@ -70,12 +70,12 @@ Fields
                           represented as a polymake Matroid.
 """
 struct MAugChowRing
-    flat_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}
-    element_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}
+    flat_indeterminates::Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}
+    element_indeterminates::Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}
     matroid::pm.BigObject
-    chow_ring::MPolyQuo{fmpq_mpoly}
+    chow_ring::MPolyQuo{MPolyElem_dec{fmpq, fmpq_mpoly}}
 
-    function MAugChowRing(flat_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}, element_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}, matroid::pm.BigObject)
+    function MAugChowRing(flat_indeterminates::Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}, element_indeterminates::Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}, matroid::pm.BigObject)
         if pm.type_name(matroid) != "Matroid"
             error("BigObject is not a matroid")
         end
@@ -83,7 +83,7 @@ struct MAugChowRing
         new(flat_indeterminates, element_indeterminates, matroid)
     end
 
-    function MAugChowRing(flat_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}, element_indeterminates::Vector{MPolyQuoElem{fmpq_mpoly}}, matroid::pm.BigObject, chow_ring)
+    function MAugChowRing(flat_indeterminates::Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}, element_indeterminates::Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}, matroid::pm.BigObject, chow_ring)
         if pm.type_name(matroid) != "Matroid"
             error("BigObject is not a matroid")
         end
@@ -318,7 +318,7 @@ julia> morphism = decomp.homomorphism.first_term_morphism;
 julia> isbijective(morphism)
 true
 julia> morphism.image
-13-element Vector{MPolyQuoElem{fmpq_mpoly}}:
+13-element Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}:
  x__6 - x__1_2_3 - x__1_4_5 + x__2_4_6 + x__3_5_6
  x__6 - x__0_2_5 + x__0_1_6 - x__1_2_3 + x__3_5_6
  x__6 - x__0_3_4 + x__0_1_6 - x__1_2_3 + x__2_4_6
@@ -513,7 +513,7 @@ inside the direct sum decomposition of a Chow ring with Chow Rings of smaller
 matroids.
 """
 function create_theta_i(domain::MChowRing, image::MChowRing, deleted_element::Int64, factor=1)
-    image_gens = Vector{MPolyQuoElem{fmpq_mpoly}}(undef, length(gens(domain.chow_ring)))
+    image_gens = Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}(undef, length(gens(domain.chow_ring)))
     domain_gens = gens(domain.chow_ring)
 
     for i = 1:length(gens(domain.chow_ring))
@@ -525,7 +525,7 @@ function create_theta_i(domain::MChowRing, image::MChowRing, deleted_element::In
 end
 
 function create_aug_theta_i(domain::MAugChowRing, image::MAugChowRing, deleted_element::Int64, factor=1)
-    image_gens = Vector{MPolyQuoElem{fmpq_mpoly}}(undef, length(gens(domain.chow_ring)))
+    image_gens = Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}(undef, length(gens(domain.chow_ring)))
     domain_ys = domain.element_indeterminates
     domain_xs = domain.flat_indeterminates
     image_xs = image.flat_indeterminates
@@ -619,7 +619,7 @@ function create_projection(domain::MChowRing, image::MChowRing, removed_elements
         return nothing
     end
 
-    image_gens = Vector{MPolyQuoElem{fmpq_mpoly}}(undef, length(gens(domain.chow_ring)))
+    image_gens = Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}(undef, length(gens(domain.chow_ring)))
     domain_gens = gens(domain.chow_ring)
 
     # Relates matroid elements of the domain with the image
@@ -647,7 +647,7 @@ function create_projection(domain::MChowRing, image::MChowRing, removed_elements
     hom(domain.chow_ring, image.chow_ring, image_gens)
 end
 
-function project_gen(domain_gen::MPolyQuoElem{fmpq_mpoly}, image::MChowRing, removed_elements, i::Int64, is_contraction::Bool, int_mapping)
+function project_gen(domain_gen::MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}, image::MChowRing, removed_elements, i::Int64, is_contraction::Bool, int_mapping)
     elements_in_gen = split(split(string(domain_gen), "__")[2], "_")
     elements_in_gen = [parse(Int, e) for e in elements_in_gen]
 
@@ -812,7 +812,7 @@ julia> using MatroidChowRings
 julia> fano_matroid = Polymake.matroid.fano_matroid();
 julia> chow_ring =  matroid_chow_ring(fano_matroid);
 julia> x = chow_ring.indeterminates
-14-element Vector{MPolyQuoElem{fmpq_mpoly}}:
+14-element Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}:
  x__0
  x__1
  x__2
@@ -853,7 +853,7 @@ function matroid_chow_ring(matroid::pm.BigObject)::MChowRing
     proper_flats = flats[2:pm.size(flats, 1)-1, 1:pm.size(flats,2)]
 
     if length(proper_flats) == 0
-        empty_vector = Vector{MPolyQuoElem{fmpq_mpoly}}()
+        empty_vector = Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}()
         return MChowRing(empty_vector, matroid)
     end
 
@@ -876,7 +876,7 @@ end
 
 Computes the augmented Chow ring of a matroid. It follows the convention of the chow ring as defined
 in 'A SEMI-SMALL DECOMPOSITION OF THE CHOW RING OF A MATROID' by Tom Braden, June Huh et. al.
-The chow ring is represented over the rationals, and proper flats and matroid groundset elements
+The chowVector ring is represented over the rationals, and proper flats and matroid groundset elements
 enter as variables.
 
 This function accepts any loopless matroid as input, where the matroid is a polymake matroid.
@@ -891,7 +891,7 @@ julia> using MatroidChowRings
 julia> fano_matroid = Polymake.matroid.fano_matroid();
 julia> chow_ring = augmented_matroid_chow_ring(fano_matroid);
 julia> x = chow_ring.flat_indeterminates
-15-element Vector{MPolyQuoElem{fmpq_mpoly}}:
+15-element Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}:
  x__
  x__0
  x__1
@@ -909,7 +909,7 @@ julia> x = chow_ring.flat_indeterminates
  x__3_5_6
 
 julia> y = chow_ring.element_indeterminates
-7-element Vector{MPolyQuoElem{fmpq_mpoly}}:
+7-element Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}:
  y_0
  y_1
  y_2
@@ -936,7 +936,7 @@ function augmented_matroid_chow_ring(matroid::pm.BigObject)::MAugChowRing
     end
 
     if matroid.N_ELEMENTS == 0
-        empty_vector = Vector{MPolyQuoElem{fmpq_mpoly}}()
+        empty_vector = Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}()
         return MAugChowRing(empty_vector, empty_vector, matroid)
     end
 
@@ -968,7 +968,7 @@ end
 
 function generate_base_ring(proper_flats)
     variable_names = create_flat_variables_names(proper_flats)
-    PolynomialRing(QQ, variable_names);
+    GradedPolynomialRing(QQ, variable_names);
 end
 
 function generate_augmented_base_ring(proper_flats, n_elements)
@@ -980,7 +980,7 @@ function generate_augmented_base_ring(proper_flats, n_elements)
     flat_variable_names = create_flat_variables_names(proper_flats)
     variable_names = vcat(matroid_element_variable_names, flat_variable_names)
 
-    ring, variables = PolynomialRing( QQ, variable_names);
+    ring, variables = GradedPolynomialRing( QQ, variable_names);
 
     ring, variables[1:n_elements], variables[n_elements + 1: length(variables)]
 end
@@ -1004,7 +1004,7 @@ end
 function generate_type_i_ideal(base_ring, proper_flats, indeterminates, matroid)
     n = matroid.N_ELEMENTS
     n_proper_flats = pm.size(proper_flats, 1)
-    ideal_polynomials = Vector{fmpq_mpoly}()
+    ideal_polynomials = Vector{MPolyElem_dec{fmpq, fmpq_mpoly}}()
 
     for i in 0:n-1
         for j in i+1:n-1
@@ -1027,7 +1027,7 @@ end
 
 function generate_augmented_type_i_ideal(proper_flats, matroid_element_vars, flat_vars)
     n_proper_flats = pm.size(proper_flats, 1)
-    ideal_polynomials = Array{fmpq_mpoly}(undef, length(matroid_element_vars))
+    ideal_polynomials = Array{MPolyElem_dec{fmpq, fmpq_mpoly}}(undef, length(matroid_element_vars))
 
     ground_set = Polymake.Set(range(1, length(matroid_element_vars), step=1))
 
@@ -1045,7 +1045,7 @@ end
 
 function generate_type_j_ideal(proper_flats, indeterminates)
     n_proper_flats = pm.size(proper_flats, 1)
-    ideal_polynomials = Vector{fmpq_mpoly}()
+    ideal_polynomials = Vector{}()
 
     for i in 1:n_proper_flats
         for j in i:n_proper_flats
@@ -1066,7 +1066,7 @@ end
 function generate_augmented_type_j_ideal(proper_flats, matroid_element_vars, flat_vars)
     n_proper_flats = pm.size(proper_flats, 1)
     incomparable_polynomials = generate_type_j_ideal(proper_flats, flat_vars)
-    xy_polynomials = Vector{fmpq_mpoly}()
+    xy_polynomials = Vector{}()
 
     for i in 1:length(matroid_element_vars)
         for j in false_indices_in_col(proper_flats, i)
