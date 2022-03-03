@@ -472,6 +472,7 @@ function augmented_direct_sum_decomp(chow_ring::MAugChowRing, matroid_element::I
         if proper_flat_copy in flat_canidates
             to_remove_1 = proper_flat_copy
             to_remove_2 = set_complement(ground_set, proper_flat)
+
             matroid_1 = pm.matroid.contraction(matroid, to_remove_1)
             matroid_2 = pm.matroid.deletion(matroid, to_remove_2)
 
@@ -480,7 +481,10 @@ function augmented_direct_sum_decomp(chow_ring::MAugChowRing, matroid_element::I
 
             push!(second_term, (chow_1, chow_2))
 
-            # TODO: Make morphism!
+            projection_1 = create_projection(chow_1, chow_ring, to_remove_1, matroid_element, true)
+            projection_2 = create_projection(chow_2, chow_ring, to_remove_2, matroid_element, false)
+            term = find_flat_variable(chow_ring, proper_flat_copy)
+            push!(second_term_morphism, (projection_1, projection_2, term))
         end
     end
 
@@ -624,23 +628,7 @@ function create_projection(domain::MChowRing, image::MChowRing, removed_elements
 
     image_gens = Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}(undef, length(gens(domain.chow_ring)))
     domain_gens = gens(domain.chow_ring)
-
-    # Relates matroid elements of the domain with the image
-    # This is the reindexing of contraction/deletion in reverse.
-    int_mapping = Array{Int64}(undef, domain.matroid.N_ELEMENTS)
-    next_free_element = 0
-    while Polymake.in(next_free_element, removed_elements)
-        next_free_element += 1
-    end
-    for j = 1:length(int_mapping)
-        int_mapping[j] = next_free_element
-
-        next_free_element += 1
-        while Polymake.in(next_free_element, removed_elements)
-            next_free_element += 1
-        end
-    end
-
+    int_mapping = create_int_mapping(domain.matroid.N_ELEMENTS, removed_elements)
 
     for j = 1:length(gens(domain.chow_ring))
         domain_gen = domain_gens[j]
@@ -650,8 +638,71 @@ function create_projection(domain::MChowRing, image::MChowRing, removed_elements
     hom(domain.chow_ring, image.chow_ring, image_gens)
 end
 
-function project_gen(domain_gen::MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}, image::MChowRing, removed_elements, i::Int64, is_contraction::Bool, int_mapping)
+function create_projection(domain::MAugChowRing, image::MAugChowRing, removed_elements, i::Int64, is_contraction::Bool)
+    if !isdefined(domain, :chow_ring) # Edge case where ring is trivial.
+        return nothing
+    end
+
+    image_gens = Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}(undef, length(gens(domain.chow_ring)))
+    domain_gens = gens(domain.chow_ring)
+    int_mapping = create_int_mapping(domain.matroid.N_ELEMENTS, removed_elements)
+
+    for j = 1:length(domain.element_indeterminates)
+        domain_gen = domain.element_indeterminates[j]
+        image_gens[j] = image.element_indeterminates[int_mapping[j] + 1]
+    end
+
+    offset = length(domain.element_indeterminates)
+    for j = 1:length(domain.flat_indeterminates)
+        domain_gen = domain.flat_indeterminates[j]
+        image_gens[j + offset] = project_gen(domain_gen, image, removed_elements, i, is_contraction, int_mapping)
+    end
+
+    hom(domain.chow_ring, image.chow_ring, image_gens)
+end
+
+function create_projection(domain::MChowRing, image::MAugChowRing, removed_elements, i::Int64, is_contraction::Bool)
+    if !isdefined(domain, :chow_ring) # Edge case where ring is trivial.
+        return nothing
+    end
+
+    image_gens = Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}(undef, length(gens(domain.chow_ring)))
+    domain_gens = gens(domain.chow_ring)
+    int_mapping = create_int_mapping(domain.matroid.N_ELEMENTS, removed_elements)
+
+    for j = 1:length(gens(domain.chow_ring))
+        domain_gen = domain_gens[j]
+        image_gens[j] = project_gen(domain_gen, image, removed_elements, i, is_contraction, int_mapping)
+    end
+
+    hom(domain.chow_ring, image.chow_ring, image_gens)
+end
+
+function create_int_mapping(n_elements::Int64, removed_elements)
+    # Relates matroid elements of the domain with the image
+    # This is the reindexing of contraction/deletion in reverse.
+    int_mapping = Array{Int64}(undef, n_elements)
+    next_free_element = 0
+    while Polymake.in(next_free_element, removed_elements)
+        next_free_element += 1
+    end
+    for j = 1:length(int_mapping)
+        int_mapping[j] = next_free_element
+        next_free_element += 1
+        while Polymake.in(next_free_element, removed_elements)
+            next_free_element += 1
+        end
+    end
+
+    int_mapping
+end
+
+function project_gen(domain_gen::MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}, image, removed_elements, i::Int64, is_contraction::Bool, int_mapping)
     elements_in_gen = split(split(string(domain_gen), "__")[2], "_")
+    if elements_in_gen[1] == ""
+        elements_in_gen = []
+    end
+
     elements_in_gen = [parse(Int, e) for e in elements_in_gen]
 
     # +1 here because matroid elements start from 0, and arrays start from 1.
@@ -683,6 +734,9 @@ function find_flat_variable(chow_ring, contents)
         end
 
         elements_in_flat = split(split(string(gen), "__")[2], "_")
+        if elements_in_flat[1] == ""
+            elements_in_flat = []
+        end
 
         if length(elements_in_flat) != length(contents)
             continue
