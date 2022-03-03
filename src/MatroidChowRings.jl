@@ -490,7 +490,10 @@ function augmented_direct_sum_decomp(chow_ring::MAugChowRing, matroid_element::I
     coloop_term_morphism = nothing
     if is_coloop
         coloop_term = first_term
-        # TODO: Make morphism!
+        flat = copy(ground_set)
+        delete!(flat, matroid_element)
+        term = find_flat_variable(chow_ring, flat)
+        coloop_term_morphism = create_aug_theta_i(coloop_term, chow_ring, matroid_element, term)
     end
 
     chow_hom = MAugChowRingHomorphism(first_term_morphism, second_term_morphism, coloop_term_morphism)
@@ -525,7 +528,6 @@ function create_aug_theta_i(domain::MAugChowRing, image::MAugChowRing, deleted_e
     domain_ys = domain.element_indeterminates
     domain_xs = domain.flat_indeterminates
     image_ys = image.element_indeterminates
-    # image_xs = image.flat_indeterminates
 
     for i = 1:length(domain_ys)
         image_index = i
@@ -674,8 +676,12 @@ end
 """
 Finds the generator in chow_ring with exactly the elements as in contents.
 """
-function find_flat_variable(chow_ring::MChowRing, contents)
+function find_flat_variable(chow_ring, contents)
     for gen in gens(chow_ring.chow_ring)
+        if split(string(gen), "__")[1] != "x"
+            continue
+        end
+
         elements_in_flat = split(split(string(gen), "__")[2], "_")
 
         if length(elements_in_flat) != length(contents)
@@ -691,14 +697,9 @@ function find_flat_variable(chow_ring::MChowRing, contents)
             end
         end
 
-        if !sets_equal
-            continue
+        if sets_equal
+            return gen
         end
-
-        # If the control flow reaches here, then the gen has the same elements
-        # as contents.
-
-        return gen
     end
 end
 
