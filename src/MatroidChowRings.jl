@@ -387,8 +387,6 @@ function direct_sum_decomp(chow_ring::MChowRing, matroid_element::Int64)
         push!(flat_canidates, proper_flat)
     end
     flat_canidates = Set(flat_canidates)
-# TODO: Add types here. Test it. Add example.
-    # This loop might be a good candiate for parralelization.
     second_term = []
     second_term_morphism = []
 
@@ -443,10 +441,9 @@ function augmented_direct_sum_decomp(chow_ring::MAugChowRing, matroid_element::I
         return nothing
     end
 
-    # TODO: Check bounds of matroid element.
     matroid = chow_ring.matroid
     first_term = augmented_matroid_chow_ring(pm.matroid.deletion(matroid, matroid_element))
-    # TODO: Make morphism!
+    first_term_morphism = create_aug_theta_i(first_term, chow_ring, matroid_element)
 
     ground_set = Polymake.Set(range(0, matroid.N_ELEMENTS - 1, step=1))
     flats = matroid.LATTICE_OF_FLATS.FACES
@@ -465,7 +462,6 @@ function augmented_direct_sum_decomp(chow_ring::MAugChowRing, matroid_element::I
         push!(flat_canidates, proper_flat)
     end
 
-    # This loop might be a good candiate for parralelization.
     second_term = []
     second_term_morphism = []
 
@@ -497,7 +493,7 @@ function augmented_direct_sum_decomp(chow_ring::MAugChowRing, matroid_element::I
         # TODO: Make morphism!
     end
 
-    chow_hom = MAugChowRingHomorphism(nothing, second_term_morphism, coloop_term_morphism)
+    chow_hom = MAugChowRingHomorphism(first_term_morphism, second_term_morphism, coloop_term_morphism)
 
     MAugChowRingDecomp(matroid_element, chow_ring, first_term, second_term, coloop_term, chow_hom)
 end
@@ -528,15 +524,15 @@ function create_aug_theta_i(domain::MAugChowRing, image::MAugChowRing, deleted_e
     image_gens = Vector{MPolyQuoElem{MPolyElem_dec{fmpq, fmpq_mpoly}}}(undef, length(gens(domain.chow_ring)))
     domain_ys = domain.element_indeterminates
     domain_xs = domain.flat_indeterminates
-    image_xs = image.flat_indeterminates
+    image_ys = image.element_indeterminates
+    # image_xs = image.flat_indeterminates
 
     for i = 1:length(domain_ys)
         image_index = i
         if i > deleted_element
             image_index += 1
         end
-        # TODO: Check if factor needs to be here?
-        image_gens[i] = domain_ys[image_index]
+        image_gens[i] = factor * image_ys[image_index]
     end
 
     offset = length(domain_ys)
@@ -557,7 +553,7 @@ deleted element = 5, it creates the polynomial
 x_1_3_6_8 + x_1_3_5_6_8 in the image, where a term is set to 0 if the
 corresponding variable does not exist in the image.
 """
-function find_gen_image(domain_gen, image::MChowRing, deleted_element::Int64)
+function find_gen_image(domain_gen, image, deleted_element::Int64)
      elements_in_flat = split(string(domain_gen), "__")[2]
 
      first_canidate = "x_"
@@ -565,7 +561,12 @@ function find_gen_image(domain_gen, image::MChowRing, deleted_element::Int64)
 
      previous_element = nothing
      second_canidate_adjusted = false
+
      for element_string in split(elements_in_flat, "_")
+         if element_string == ""
+             break
+         end
+
          element = parse(Int, element_string)
          if element >= deleted_element
              element += 1
@@ -615,7 +616,7 @@ There still exists a corresponding i. In this case, X_(F') gets mapped to
 X_(F') + X_(F'+i).
 """
 function create_projection(domain::MChowRing, image::MChowRing, removed_elements, i::Int64, is_contraction::Bool)
-    if domain.chow_ring == nothing # Edge case where ring is trivial.
+    if !isdefined(domain, :chow_ring) # Edge case where ring is trivial.
         return nothing
     end
 
